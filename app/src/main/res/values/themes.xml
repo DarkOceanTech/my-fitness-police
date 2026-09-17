@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MyFitnessPolice" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#050810</item>
+        <item name="android:statusBarColor">#050810</item>
+        <item name="android:navigationBarColor">#050810</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#9BC2FF</item>
+    </style>
+</resources>

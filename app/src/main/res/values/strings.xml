@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">MyFitnessPolice</string>
+    <string name="nav_dispatch">Dispatch</string>
+    <string name="nav_academy">Academy</string>
+    <string name="nav_pto">PTO</string>
+    <string name="nav_dor">DOR</string>
+    <string name="nav_armory">Armory</string>
+    <string name="workout_empty_title">Your next workout starts here</string>
+    <string name="workout_empty_message">Record exercises, weights, and reps during your training. Workout logging is coming next.</string>
+    <string name="history_empty_title">No completed workouts yet</string>
+    <string name="history_empty_message">Your completed sessions will appear here so you can review your training.</string>
+    <string name="exercises_empty_title">Build your exercise library</string>
+    <string name="exercises_empty_message">Your exercise catalog will live here. Adding and choosing exercises is coming next.</string>
+</resources>
