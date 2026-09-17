@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.myfitnesspolice"
+    namespace = "com.darkoceantech.myfitnesspolice"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.myfitnesspolice"
+        applicationId = "com.darkoceantech.myfitnesspolice"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
