@@ -2,8 +2,8 @@
     <string name="app_name">MyFitnessPolice</string>
     <string name="nav_dispatch">Dispatch</string>
     <string name="nav_academy">Academy</string>
-    <string name="nav_pto">PTO</string>
-    <string name="nav_dor">DOR</string>
+    <string name="nav_pto">Field</string>
+    <string name="nav_dor">Reports</string>
     <string name="nav_armory">Armory</string>
     <string name="workout_empty_title">Your next workout starts here</string>
     <string name="workout_empty_message">Record exercises, weights, and reps during your training. Workout logging is coming next.</string>
