@@ -111,8 +111,11 @@ class ActiveCooldownTest {
                 val start = System.currentTimeMillis() - 61_000
                 db.sessionStateDao().save(state.copy(phaseStartedAt = start, dutyStartedAt = start - 1000))
             }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("0:00").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("cancel-active-set").assertIsDisplayed()
+            compose.onNodeWithTag("cooldown-remaining").performScrollTo()
+            compose.waitUntil(5000) {
+                compose.onAllNodes(hasTestTag("cooldown-remaining") and hasText("0:00")).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("cancel-active-set").performScrollTo().assertIsDisplayed()
             assertNull(runBlocking { db.workoutDao().getDetails("w")!!.workout.finishedAt })
             // Leaving the editor removes its auto-finish deferral; the shared monitor continues on Field.
             compose.onNode(hasText("Field") and hasClickAction()).performClick()

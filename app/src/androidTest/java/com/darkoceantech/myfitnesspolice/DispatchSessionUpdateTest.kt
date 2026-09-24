@@ -53,7 +53,7 @@ class DispatchSessionUpdateTest {
         try {
             compose.setContent { MyFitnessPoliceApp(repo) }
             openSession()
-            compose.onNodeWithText("Cancel workout").assertIsDisplayed().performClick()
+            compose.onNodeWithText("Cancel workout").performScrollTo().assertIsDisplayed().performClick()
             compose.waitUntil(5000) { runBlocking { db.workoutDao().getDetails("w") == null } }
             compose.onNodeWithText("Resume workout").assertDoesNotExist()
             runBlocking {
@@ -80,10 +80,10 @@ class DispatchSessionUpdateTest {
         try {
             compose.setContent { MyFitnessPoliceApp(repo) }
             openSession()
-            compose.onNodeWithText("Cancel workout").assertIsDisplayed()
+            compose.onNodeWithText("Cancel workout").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("set-action-s1").performClick()
             compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
-            compose.onNodeWithText("Pause workout").assertIsDisplayed()
+            compose.onNodeWithText("Pause workout").performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription("Actual reps s1").assertHasNoClickAction()
             compose.onNodeWithTag("set-action-s1").performClick()
             waitTag("actual-reps-input")
@@ -116,7 +116,7 @@ class DispatchSessionUpdateTest {
             compose.onNodeWithTag("active-set-times").performScrollTo().assertIsDisplayed()
             screenshot("active-set-details")
             compose.onNodeWithContentDescription("Back to exercise").performClick()
-            compose.onNodeWithText("Finish workout").performClick()
+            compose.onNodeWithText("Finish workout").performScrollTo().performClick()
             compose.onNodeWithText("Finish", substring = false).performClick()
             waitTag("history-detail")
             compose.onNode(hasText("Reports") and hasClickAction()).assertIsSelected()

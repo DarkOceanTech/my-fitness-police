@@ -1,5 +1,6 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -17,8 +18,10 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -96,20 +99,10 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
             val index = entries.indexOfFirst { entry -> entry.sets.any { it.id == progress.currentSetId } }
             if (index >= 0 && progress.phase == "active") pager.animateScrollToPage(index)
         }
-        Column(modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { back() }, enabled = !action.saving) { Icon(painterResource(R.drawable.ic_back), if (infoId != null) "Back to exercise" else "Back to workout home") }
-                Column(Modifier.weight(1f)) {
-                    Text(workout.workout.displayName(),
-                        style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(workout.workout.startedAt)),
-                        style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
-                }
-            }
-            ExerciseProgressStrip(entries, pager.currentPage, entries.indexOfFirst { entry -> entry.sets.any { it.id == progress.currentSetId } }) { index -> if (!action.saving) { infoId = null; scope.launch { pager.animateScrollToPage(index) } } }
-            SessionTimers(workout, progress, now, Modifier.padding(horizontal = 16.dp))
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val sessionNotices: @Composable () -> Unit = {
             if (progress.phase == "cooldown") {
-                Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("cooldown-banner"),
+                Surface(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("cooldown-banner"),
                     shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Blue)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -125,15 +118,52 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                 }
             }
             if (!progress.hasStarted) {
-                Text("Ready when you are. Tap Start on the first set to begin.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                Text("Ready when you are. Tap Start on the first set to begin.", Modifier.padding(vertical = 8.dp)
                     .testTag("training-ready"), style = MaterialTheme.typography.bodySmall, color = PoliceColors.LightBlue)
             }
-            if (progress.isPaused) Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (progress.isPaused) Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("PAUSED" + progress.pauseReason.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
                     style = MaterialTheme.typography.bodySmall, color = PoliceColors.LightBlue,
                     modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 TextButton(onClick = { pauseDialog = true }, enabled = !action.saving) { Text("Edit reason") }
             }
+        }
+        val sessionFooter: @Composable () -> Unit = {
+            if (action.error != null && !finishDialog && !pauseDialog && !progress.awaitingActual && noteId == null && infoId == null && equipmentId == null) {
+                Text(action.error!!, Modifier.padding(horizontal = 16.dp), color = PoliceColors.Error, style = MaterialTheme.typography.bodySmall)
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp).testTag("session-actions"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = {
+                    model.clearError()
+                    if (!progress.hasStarted) model.cancelUnstartedSession(workout.workout.id)
+                    else if (progress.isPaused) model.resumeSession(workout.workout.id) else model.pauseSession(workout.workout.id)
+                }, enabled = !action.saving, modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag("pause-resume-workout")) {
+                    Text(if (!progress.hasStarted) "Cancel workout" else if (progress.isPaused) "Resume workout" else "Pause workout")
+                }
+                PoliceButton(onClick = { model.clearError(); finishDialog = true },
+                    enabled = !action.saving && progress.hasStarted, modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag("finish-workout")) { Text("Finish workout") }
+            }
+        }
+        Column(modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxWidth().testTag("active-workout-header")) {
+                val timerWidth = (maxWidth * .45f).coerceAtMost(280.dp)
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClick = { back() }, enabled = !action.saving) {
+                        Icon(painterResource(R.drawable.ic_back), if (infoId != null) "Back to exercise" else "Back to workout home")
+                    }
+                    Column(Modifier.weight(1f).testTag("active-workout-title")) {
+                        Text(workout.workout.displayName(), style = MaterialTheme.typography.headlineSmall,
+                            maxLines = if (landscape) 1 else 2, overflow = TextOverflow.Ellipsis)
+                        Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(workout.workout.startedAt)),
+                            style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (landscape) SessionTimers(workout, progress, now, Modifier.width(timerWidth), compact = true)
+                }
+            }
+            ExerciseProgressStrip(entries, pager.currentPage, entries.indexOfFirst { entry -> entry.sets.any { it.id == progress.currentSetId } }) { index -> if (!action.saving) { infoId = null; scope.launch { pager.animateScrollToPage(index) } } }
+            if (!landscape) SessionTimers(workout, progress, now, Modifier.padding(horizontal = 16.dp))
             val infoEntry = entries.find { entry -> entry.sets.any { it.id == infoId } }
             val infoSet = infoEntry?.sets?.find { it.id == infoId }
             if (infoEntry != null && infoSet != null) key(infoEntry.workoutExercise.id) {
@@ -147,44 +177,42 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                         onNavigationLocked = lock, onEdit = model::clearError,
                         onSave = { pounds, planned, actual, rpe -> model.correctActiveSet(workout.workout.id, detailSet.id, pounds, planned, actual, rpe) },
                         onSaveNote = { model.saveActiveSetNote(workout.workout.id, detailSet.id, it) },
-                        totals = { WorkoutSummary(workout, Modifier, "Set ${detailSet.position + 1} info", infoEntry.exercise.name,
-                            tagPrefix = "active", compactSetInfo = true) })
+                        totals = {
+                            sessionNotices()
+                            WorkoutSummary(workout, Modifier, "Set ${detailSet.position + 1} info", infoEntry.exercise.name,
+                                tagPrefix = "active", compactSetInfo = true)
+                        })
                 }
             }
-            else if (entries.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            else if (entries.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState()).padding(16.dp)) {
+                sessionNotices()
                 Text("No sets in this session.")
+                sessionFooter()
             } else HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("active-exercise-pager"),
                 pageSpacing = 12.dp, key = { entries[it].workoutExercise.id }, verticalAlignment = Alignment.Top) { index ->
                 val entry = entries[index]
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    ActiveExerciseCard(entry, workout, progress, !action.saving,
-                        onNote = { model.clearError(); noteId = entry.workoutExercise.id },
-                        onEquipment = { model.clearError(); equipmentId = entry.workoutExercise.id },
-                        onComplete = { model.completeActiveSet(workout.workout.id, it) },
-                        onStart = { model.startNextSet(workout.workout.id, it) },
-                        onInfo = { model.clearError(); infoId = it })
-                    val activeEntry = entries.firstOrNull { e -> e.sets.any { it.id == progress.currentSetId } }
-                    if (progress.phase == "active" && activeEntry != null && activeEntry != entry) {
-                        TextButton(onClick = { scope.launch { pager.animateScrollToPage(entries.indexOf(activeEntry)) } }) {
-                            Text("Return to active set · ${activeEntry.exercise.name}")
+                // Keep the controls in the same vertical scroll as the sets, in both orientations.
+                // Neighboring pages must not expose duplicate pause/finish controls to accessibility.
+                Box(Modifier.fillMaxSize().then(if (index == pager.currentPage) Modifier else Modifier.clearAndSetSemantics { })) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .testTag("active-exercise-scroll-${entry.workoutExercise.id}").padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        sessionNotices()
+                        ActiveExerciseCard(entry, workout, progress, !action.saving,
+                            onNote = { model.clearError(); noteId = entry.workoutExercise.id },
+                            onEquipment = { model.clearError(); equipmentId = entry.workoutExercise.id },
+                            onComplete = { model.completeActiveSet(workout.workout.id, it) },
+                            onStart = { model.startNextSet(workout.workout.id, it) },
+                            onInfo = { model.clearError(); infoId = it })
+                        val activeEntry = entries.firstOrNull { e -> e.sets.any { it.id == progress.currentSetId } }
+                        if (progress.phase == "active" && activeEntry != null && activeEntry != entry) {
+                            TextButton(onClick = { scope.launch { pager.animateScrollToPage(entries.indexOf(activeEntry)) } }) {
+                                Text("Return to active set · ${activeEntry.exercise.name}")
+                            }
                         }
+                        sessionFooter()
                     }
-                }
-            }
-            if (action.error != null && !finishDialog && !pauseDialog && !progress.awaitingActual && noteId == null && infoId == null && equipmentId == null) {
-                Text(action.error!!, Modifier.padding(horizontal = 16.dp), color = PoliceColors.Error, style = MaterialTheme.typography.bodySmall)
-            }
-            if (infoId == null) Surface(color = PoliceColors.Card, shadowElevation = 8.dp) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = {
-                        model.clearError()
-                        if (!progress.hasStarted) model.cancelUnstartedSession(workout.workout.id)
-                        else if (progress.isPaused) model.resumeSession(workout.workout.id) else model.pauseSession(workout.workout.id)
-                    }, enabled = !action.saving, modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag("pause-resume-workout")) {
-                        Text(if (!progress.hasStarted) "Cancel workout" else if (progress.isPaused) "Resume workout" else "Pause workout")
-                    }
-                    PoliceButton(onClick = { model.clearError(); finishDialog = true },
-                        enabled = !action.saving && progress.hasStarted, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("Finish workout") }
                 }
             }
         }
@@ -255,25 +283,26 @@ private fun ExerciseProgressStrip(entries: List<ExerciseWithSets>, selectedIndex
 }
 
 @Composable
-private fun SessionTimers(workout: WorkoutDetails, state: WorkoutSessionState, now: Long, modifier: Modifier) {
+private fun SessionTimers(workout: WorkoutDetails, state: WorkoutSessionState, now: Long, modifier: Modifier, compact: Boolean = false) {
     val current = workout.orderedSets().firstOrNull { it.id == state.currentSetId }
     val active = if (state.phase == "active") state.phaseMillis(now) else current?.activeMillis ?: 0
     val rest = if (state.phase in listOf("rest", "cooldown")) state.phaseMillis(now) else 0
-    Surface(modifier.fillMaxWidth(), shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ShieldMark(Modifier.size(32.dp))
+    Surface(modifier.fillMaxWidth().testTag("session-timers"), shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
+        Row(Modifier.padding(if (compact) 10.dp else 14.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
+            if (!compact) ShieldMark(Modifier.size(32.dp))
             Column(Modifier.weight(1f)) {
                 Text("ON DUTY", style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
-                Text(sessionTime(state.dutyMillis(now)), style = StatTypography.copy(fontSize = 22.sp), modifier = Modifier.testTag("duty-time"))
+                Text(sessionTime(state.dutyMillis(now)), style = StatTypography.copy(fontSize = if (compact) 18.sp else 22.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("duty-time"))
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("ACTIVE", Modifier.width(52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
-                    Text(sessionTime(active), style = StatTypography.copy(fontSize = 16.sp), modifier = Modifier.testTag("active-time"))
+                    Text("ACTIVE", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
+                    Text(sessionTime(active), style = StatTypography.copy(fontSize = if (compact) 14.sp else 16.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("active-time"))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("BREAK", Modifier.width(52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
-                    Text(sessionTime(rest), style = StatTypography.copy(fontSize = 16.sp), modifier = Modifier.testTag("break-time"))
+                    Text("BREAK", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
+                    Text(sessionTime(rest), style = StatTypography.copy(fontSize = if (compact) 14.sp else 16.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("break-time"))
                 }
             }
         }

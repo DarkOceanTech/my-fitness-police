@@ -123,7 +123,7 @@ class ActiveWorkoutTest {
             compose.onNodeWithContentDescription("Back to exercise").performClick()
             compose.onNodeWithTag("set-action-${sets[1].id}").performScrollTo().performClick()
             compose.waitUntil(5000) { runBlocking { repo.observeWorkout(id).first()!!.sessionState!!.currentSetId == sets[1].id } }
-            compose.onNodeWithTag("pause-resume-workout").performClick()
+            compose.onNodeWithTag("pause-resume-workout").performScrollTo().performClick()
             waitFor("Workout paused")
             compose.onNodeWithTag("pause-reason-input").performTextReplacement("Phone call")
             compose.onNodeWithText("Save reason").performClick()
@@ -137,10 +137,10 @@ class ActiveWorkoutTest {
             compose.onNodeWithTag("workout-section-0").performClick()
             compose.onNodeWithText("Resume workout").performScrollTo().performClick()
             waitFor("ON DUTY")
-            compose.onNodeWithText("PAUSED · Phone call").assertIsDisplayed()
-            compose.onNodeWithTag("pause-resume-workout").performClick()
+            compose.onNodeWithText("PAUSED · Phone call").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("pause-resume-workout").performScrollTo().performClick()
             compose.waitUntil(5000) { runBlocking { !repo.observeWorkout(id).first()!!.sessionState!!.isPaused } }
-            compose.onNodeWithText("Finish workout").performClick()
+            compose.onNodeWithText("Finish workout").performScrollTo().performClick()
             compose.onNodeWithText("You can pause your workout if you need to come back to it later.").assertIsDisplayed()
             screenshot("finish-confirmation")
             compose.onNodeWithText("Finish", substring = false).performClick()
