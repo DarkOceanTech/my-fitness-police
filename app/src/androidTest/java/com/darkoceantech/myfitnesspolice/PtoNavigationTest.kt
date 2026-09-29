@@ -106,8 +106,8 @@ class PtoNavigationTest {
             compose.setContent { MyFitnessPoliceApp(repo) }
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()
             compose.onNodeWithTag("workout-section-0").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Resume workout").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Resume workout").performScrollTo().performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("return-to-active-workout").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("return-to-active-workout").performClick()
             compose.onNodeWithText("Finish workout").performClick()
             compose.onNodeWithText("Finish", substring = false).performClick()
             compose.waitUntil(8000) { compose.onAllNodesWithTag("history-detail").fetchSemanticsNodes().isNotEmpty() }

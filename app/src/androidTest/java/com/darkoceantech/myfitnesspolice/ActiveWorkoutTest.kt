@@ -72,10 +72,11 @@ class ActiveWorkoutTest {
             compose.onNodeWithTag("exercise-tab-${entries[0].workoutExercise.id}").performClick()
             compose.onNodeWithTag("set-action-${sets[0].id}").performScrollTo().performClick()
             waitFor("Actual reps performed")
-            compose.onNodeWithTag("actual-reps-input").assert(SemanticsMatcher.expectValue(
-                SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("10")))
+            compose.onNodeWithTag("actual-reps-input").assert(hasText("10"))
             screenshot("actual-reps")
-            compose.onNodeWithTag("actual-reps-input").performTextReplacement("8")
+            compose.onNodeWithTag("actual-reps-input").performClick()
+            compose.onNodeWithTag("actual-reps-input-options").performScrollToNode(hasText("8"))
+            compose.onNode(hasText("8") and hasClickAction() and hasAnyAncestor(hasTestTag("actual-reps-input-options"))).performClick()
             compose.onNodeWithText("Save reps").performClick()
             compose.waitUntil(5000) { runBlocking { repo.observeWorkout(id).first()!!.orderedSets()[0].actualReps == 8 } }
             compose.onNodeWithTag("actual-${sets[0].id}").assert(hasAnyDescendant(hasText("8")))
@@ -135,7 +136,7 @@ class ActiveWorkoutTest {
             compose.onNodeWithTag("weekly-Sets-value").assertTextEquals("1")
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()
             compose.onNodeWithTag("workout-section-0").performClick()
-            compose.onNodeWithText("Resume workout").performScrollTo().performClick()
+            compose.onNodeWithTag("return-to-active-workout").performClick()
             waitFor("ON DUTY")
             compose.onNodeWithText("PAUSED · Phone call").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("pause-resume-workout").performScrollTo().performClick()

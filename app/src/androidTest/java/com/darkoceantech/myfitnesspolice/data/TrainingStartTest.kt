@@ -49,7 +49,7 @@ class TrainingStartTest {
             assertEquals(0L, session.sessionState!!.dutyMillis(time))
             assertEquals(0L, session.sessionState!!.phaseMillis(time))
             assertEquals(0L, calculateWeeklyProgress(listOf(session), time).activityMillis)
-            assertEquals(id, repo.startTraining(training))
+            assertTrue(runCatching { repo.startTraining(training) }.isFailure)
             assertTrue(runCatching { repo.startTraining(otherTraining) }.isFailure)
             assertEquals(1, repo.observeUnfinished().first().size)
             db.close(); db = open(); repo = FitnessRepository(db)

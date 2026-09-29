@@ -62,7 +62,7 @@ class TrainingPlanUiTest {
             val excludedBounds = compose.onNodeWithTag("available-workouts").fetchSemanticsNode().boundsInRoot
             val includedBounds = compose.onNodeWithTag("included-workouts").fetchSemanticsNode().boundsInRoot
             assertTrue(excludedBounds.right <= includedBounds.left)
-            assertEquals(excludedBounds.top, includedBounds.top, 1f)
+            compose.onNodeWithTag("training-excluded-source").assertIsDisplayed()
             fun available(id: String) = compose.onNodeWithTag("available-workouts")
                 .performScrollToNode(hasTestTag("available-workout-$id"))
             available(back); compose.onNodeWithTag("available-workout-$back").performClick()
@@ -163,6 +163,8 @@ class TrainingPlanUiTest {
             val exercise = runBlocking { repo.observeExercises().first().single().id }
             compose.onNodeWithTag("exercise-picker-list").performScrollToNode(hasTestTag("select-exercise-$exercise"))
             compose.onNodeWithTag("select-exercise-$exercise").performClick()
+            waitTag("remove-exercise-$exercise")
+            compose.onNodeWithContentDescription("Back to workout").performClick()
             waitTag("workout-builder")
             compose.onNodeWithTag("workout-builder").performScrollToNode(hasTestTag("save-workout"))
             compose.onNodeWithTag("save-workout").performClick()

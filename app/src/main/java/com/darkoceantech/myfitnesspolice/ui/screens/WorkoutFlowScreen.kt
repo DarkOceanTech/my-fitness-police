@@ -60,12 +60,12 @@ fun WorkoutFlowScreen(model: SessionViewModel, history: Boolean, modifier: Modif
     LazyColumn(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (history) "History" else "Workout", style = MaterialTheme.typography.headlineLarge)
+                Text(if (history) "Workout Log" else "Workout", style = MaterialTheme.typography.headlineLarge)
                 SirenRule(Modifier.width(56.dp))
             }
         }
         if (history && selectedId != null) item {
-            TextButton(onClick = { selectedId = null }) { Text("Back to history") }
+            TextButton(onClick = { selectedId = null }) { Text("Back to Workout Log") }
         }
         if (state.loading) item { CircularProgressIndicator() }
         else if (state.failed) item {
@@ -190,7 +190,7 @@ fun WorkoutFlowScreen(model: SessionViewModel, history: Boolean, modifier: Modif
     if (finish && details != null) AlertDialog(
         onDismissRequest = { if (!action.saving) finish = false },
         title = { Text("Finish this workout?") },
-        text = { Text(action.error ?: "Your saved sets will be available in History. You can correct them there later.") },
+        text = { Text(action.error ?: "Your saved sets will be available in Workout Log. You can correct them there later.") },
         confirmButton = { TextButton(onClick = { model.finish(details.workout.id) }, enabled = !action.saving) { Text("Finish") } },
         dismissButton = { TextButton(onClick = { finish = false }, enabled = !action.saving) { Text("Cancel") } },
     )

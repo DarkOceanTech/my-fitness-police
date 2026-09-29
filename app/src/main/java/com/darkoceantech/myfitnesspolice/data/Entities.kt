@@ -35,6 +35,8 @@ data class Workout(
     @androidx.room.ColumnInfo(defaultValue = "''") val trainingPlan: String = "",
     val notes: String = "",
     @androidx.room.ColumnInfo(defaultValue = "''") val name: String = "",
+    // One explicit grouping action creates one history card, independently of the reusable plan.
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val historyGroupId: String? = null,
 ) {
     init { require(finishedAt == null || finishedAt >= startedAt) }
 }
@@ -57,6 +59,9 @@ data class WorkoutExercise(
     val notes: String = "",
     @androidx.room.ColumnInfo(defaultValue = "'[]'")
     val equipmentPositions: List<EquipmentPosition> = emptyList(),
+    // Snapshot provenance survives changes to or deletion of the saved source workout.
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val sourceWorkoutId: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "''") val sourceWorkoutName: String = "",
 ) {
     init { require(position >= 0) }
 }
@@ -87,7 +92,7 @@ data class WorkoutSet(
 ) {
     init {
         require(position >= 0)
-        require(modifier in listOf("none", "superset"))
+        require(modifier in listOf("none", "superset", "drop_set"))
         require(reps > 0)
         require(actualReps == null || actualReps >= 0)
         require(rpe == null || rpe in 1..10) { "RPE must be between 1 and 10" }

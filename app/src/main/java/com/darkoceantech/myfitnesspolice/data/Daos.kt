@@ -11,6 +11,9 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE")
     suspend fun getAll(): List<Exercise>
 
+    @Query("SELECT * FROM exercises WHERE id = :id")
+    suspend fun get(id: String): Exercise?
+
     @Insert
     suspend fun insert(exercise: Exercise)
 

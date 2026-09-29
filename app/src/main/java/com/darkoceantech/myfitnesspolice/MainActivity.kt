@@ -1,37 +1,23 @@
 package com.darkoceantech.myfitnesspolice
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
-import com.darkoceantech.myfitnesspolice.ui.theme.*
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.remember
 import com.darkoceantech.myfitnesspolice.ui.screens.*
-import com.darkoceantech.myfitnesspolice.ui.theme.MyFitnessPoliceTheme
+import com.darkoceantech.myfitnesspolice.ui.theme.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,83 +37,93 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
     val factory = remember(repository) { FitnessViewModelFactory(repository) }
     val sessionModel: SessionViewModel = viewModel(factory = factory)
     val exercisesModel: ExercisesViewModel = viewModel(factory = factory)
+    val sessions by sessionModel.state.collectAsStateWithLifecycle()
+    val currentSession = sessions.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
     var historySelection by rememberSaveable { mutableStateOf<String?>(null) }
     var historyOpen by rememberSaveable { mutableStateOf(false) }
+    var historyGrouping by rememberSaveable { mutableStateOf(false) }
     var armorySelection by rememberSaveable { mutableStateOf<ArmoryFeature?>(null) }
     var ptoSelection by rememberSaveable { mutableStateOf<PtoActivity?>(null) }
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.DISPATCH) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var trainingVisible by rememberSaveable { mutableStateOf(false) }
     val automaticallyFinished by sessionModel.automaticallyFinishedWorkout.collectAsStateWithLifecycle()
     LaunchedEffect(automaticallyFinished) {
         automaticallyFinished?.let { id ->
-            historySelection = id
-            historyOpen = true
-            settingsOpen = false
-            currentDestination = AppDestinations.DOR
+            // The active route retains its final summary, including the final rest time.
+            if (!trainingVisible || currentDestination != AppDestinations.ACADEMY) {
+                historySelection = id
+                historyOpen = true
+                settingsOpen = false
+                currentDestination = AppDestinations.DOR
+            }
             sessionModel.acknowledgeAutomaticFinish(id)
         }
     }
+    fun selectDestination(destination: AppDestinations) {
+        historyGrouping = false
+        settingsOpen = false
+        trainingVisible = false
+        if (destination == AppDestinations.DOR) { historyOpen = false; historySelection = null }
+        if (destination == AppDestinations.PTO) ptoSelection = null
+        if (destination == AppDestinations.ARMORY) armorySelection = null
+        currentDestination = destination
+    }
+    fun returnToSession() {
+        settingsOpen = false
+        currentDestination = AppDestinations.ACADEMY
+        trainingVisible = true
+    }
+    val landscapeSession = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+        currentDestination == AppDestinations.ACADEMY && trainingVisible
 
     MyFitnessPoliceTheme {
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Icon(painterResource(it.icon), contentDescription = null,
-                                tint = if (it == currentDestination) PoliceColors.Text else PoliceColors.Muted)
-                            Box(Modifier.width(22.dp).height(2.dp).background(
-                                if (it == currentDestination) PoliceColors.Red else PoliceColors.Blue.copy(alpha = .5f)))
+        Scaffold(modifier = Modifier.fillMaxSize().policeBackdrop(), containerColor = Color.Transparent,
+            contentColor = PoliceColors.Text) { innerPadding ->
+            Box(Modifier.fillMaxSize().padding(innerPadding)) {
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        val screenModifier = Modifier.fillMaxSize()
+                        when (currentDestination) {
+                            AppDestinations.DISPATCH -> {
+                                val weekly by sessionModel.weeklyProgress.collectAsStateWithLifecycle()
+                                if (settingsOpen) DemoSettingsScreen(screenModifier, onBack = { settingsOpen = false })
+                                else DashboardScreen(weekly, screenModifier, onSettings = { settingsOpen = true })
+                            }
+                            AppDestinations.ACADEMY -> WorkoutHomeRoute(sessionModel, exercisesModel, screenModifier,
+                                trainingVisible = trainingVisible, onTrainingVisibleChange = { trainingVisible = it },
+                                onFinished = { id ->
+                                    trainingVisible = false
+                                    historySelection = id
+                                    historyOpen = true
+                                    currentDestination = AppDestinations.DOR
+                                })
+                            AppDestinations.PTO -> PtoRoute(ptoSelection, onSelect = { ptoSelection = it }, modifier = screenModifier)
+                            AppDestinations.DOR -> {
+                                if (historyOpen) WorkoutHistoryScreen(sessionModel, historySelection, { historySelection = it }, screenModifier,
+                                    onBack = { historyOpen = false; historySelection = null })
+                                else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier,
+                                    onGroupWorkouts = { sessionModel.clearError(); historyGrouping = true })
+                            }
+                            AppDestinations.ARMORY -> ArmoryRoute(armorySelection, onSelect = { armorySelection = it }, modifier = screenModifier)
                         }
-                    },
-                    label = { Text(stringResource(it.label), style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) },
-                    selected = it == currentDestination,
-                    onClick = {
-                        settingsOpen = false
-                        if (it == AppDestinations.DOR) { historyOpen = false; historySelection = null }
-                        if (it == AppDestinations.PTO) ptoSelection = null
-                        if (it == AppDestinations.ARMORY) armorySelection = null
-                        currentDestination = it
                     }
-                )
+                    if (currentSession != null && !(currentDestination == AppDestinations.ACADEMY && trainingVisible)) {
+                        CurrentSessionShortcut(currentSession, onOpen = ::returnToSession)
+                    }
+                    if (!landscapeSession) PoliceBottomNavigation(currentDestination, ::selectDestination)
+                }
+                if (landscapeSession) LandscapeWorkoutNavigation(currentDestination, ::selectDestination,
+                    Modifier.align(Alignment.BottomStart))
             }
         }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize().policeBackdrop(), containerColor = Color.Transparent) { innerPadding ->
-            val screenModifier = Modifier.fillMaxSize().padding(innerPadding)
-            when (currentDestination) {
-                AppDestinations.DISPATCH -> {
-                    val weekly by sessionModel.weeklyProgress.collectAsStateWithLifecycle()
-                    if (settingsOpen) DemoSettingsScreen(screenModifier, onBack = { settingsOpen = false })
-                    else DashboardScreen(weekly, screenModifier, onSettings = { settingsOpen = true })
-                }
-                AppDestinations.ACADEMY -> {
-                    WorkoutHomeRoute(sessionModel, exercisesModel, screenModifier, onFinished = { id ->
-                        historySelection = id
-                        historyOpen = true
-                        currentDestination = AppDestinations.DOR
-                    })
-                }
-                AppDestinations.PTO -> PtoRoute(ptoSelection, onSelect = { ptoSelection = it }, modifier = screenModifier)
-                AppDestinations.DOR -> {
-                    if (historyOpen) WorkoutHistoryScreen(sessionModel, historySelection, { historySelection = it }, screenModifier,
-                        onBack = { historyOpen = false; historySelection = null })
-                    else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier)
-                }
-                AppDestinations.ARMORY -> ArmoryRoute(armorySelection,
-                    onSelect = { armorySelection = it }, modifier = screenModifier)
-            }
-        }
+        if (historyGrouping) HistoryPlanGroupingDialog(sessionModel,
+            onDismiss = { historyGrouping = false; sessionModel.clearError() },
+            onGrouped = { historyGrouping = false; historyOpen = true; historySelection = null })
     }
 }
 
-}
-
-enum class AppDestinations(
-    val label: Int,
-    val icon: Int,
-) {
+enum class AppDestinations(val label: Int, val icon: Int) {
     DISPATCH(R.string.nav_dispatch, R.drawable.ic_dashboard),
     ACADEMY(R.string.nav_academy, R.drawable.ic_workout),
     PTO(R.string.nav_pto, R.drawable.ic_pto),

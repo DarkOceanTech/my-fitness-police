@@ -35,7 +35,8 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
     dropTarget: Boolean, dragEnabled: Boolean, collapsed: Boolean, onToggleCollapse: () -> Unit,
     onDragStart: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
     onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?,
-    onAdd: () -> Unit, onCopyLast: () -> Unit, onNote: () -> Unit, onEquipment: () -> Unit, onRemove: () -> Unit, onChange: (String, String, String) -> Unit) {
+    onAdd: () -> Unit, onCopyLast: () -> Unit, onNote: () -> Unit, onEquipment: () -> Unit, onRemove: () -> Unit,
+    onDeleteSet: (String) -> Unit, onChange: (String, String, String) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
     val dragStart by rememberUpdatedState(onDragStart)
@@ -112,6 +113,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                         listOf("Set", "Modifier", "Type", "Lbs", "Reps").forEach { title ->
                             Text(title, Modifier.weight(1f), fontSize = 10.sp, color = PoliceColors.Muted, textAlign = TextAlign.Center)
                         }
+                        Spacer(Modifier.width(48.dp))
                     }
                     entry.sets.sortedBy { it.position }.forEachIndexed { index, set ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -122,13 +124,13 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                                 contentAlignment = Alignment.Center) {
                                 Text((index + 1).toString(), fontSize = 13.sp)
                             }
-                            TablePicker("Modifier set ${index + 1}", set.modifier, listOf("none", "superset"), enabled, Modifier.weight(1f),
-                                label = { if (it == "none") "Na" else "Ss" },
-                                fullName = { if (it == "none") "None" else "Superset" }) { onChange(set.id, "modifier", it) }
+                            TablePicker("Modifier set ${index + 1}", set.modifier, listOf("none", "superset", "drop_set"), enabled, Modifier.weight(1f),
+                                label = { when (it) { "superset" -> "S"; "drop_set" -> "D"; else -> "R" } },
+                                fullName = { when (it) { "superset" -> "Superset"; "drop_set" -> "Drop set"; else -> "Regular" } }) { onChange(set.id, "modifier", it) }
                             TablePicker("Type set ${index + 1}", if (set.isWarmup) "warmup" else "working set",
                                 listOf("warmup", "working set"), enabled, Modifier.weight(1f),
                                 label = { if (it == "warmup") "Wu" else "Ws" },
-                                fullName = { if (it == "warmup") "Warmup" else "Working set" }) { onChange(set.id, "type", it) }
+                                fullName = { if (it == "warmup") "Warm-up" else "Working set" }) { onChange(set.id, "type", it) }
                             val weight = BigDecimal.valueOf(set.weightGrams).divide(BigDecimal("453.59237"), 2,
                                 RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
                             val weights = remember(weight) { ((0..600).map { BigDecimal.valueOf(it * 25L, 1)
@@ -140,6 +142,11 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                                 .distinct().sortedBy { it.toInt() } }
                             TablePicker("Reps set ${index + 1}", set.reps.toString(), reps, enabled, Modifier.weight(1f)) {
                                 onChange(set.id, "reps", it)
+                            }
+                            IconButton(onClick = { onDeleteSet(set.id) }, enabled = enabled,
+                                modifier = Modifier.size(48.dp).testTag("delete-planned-set-${set.id}")
+                                    .semantics { contentDescription = "Remove set ${index + 1} of ${entry.exercise.name}" }) {
+                                Text("×", color = if (enabled) PoliceColors.Error else PoliceColors.Muted, fontSize = 24.sp)
                             }
                         }
                     }

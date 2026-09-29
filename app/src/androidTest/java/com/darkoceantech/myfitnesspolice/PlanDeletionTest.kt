@@ -58,7 +58,7 @@ class PlanDeletionTest {
             waitFor("Create My First Workout")
             compose.onNodeWithText("Edit workout").assertDoesNotExist()
             compose.onNodeWithText("Arm Focus").assertDoesNotExist()
-            compose.onNodeWithText("Resume workout").performScrollTo().performClick()
+            compose.onNodeWithTag("return-to-active-workout").performClick()
             waitFor("ON DUTY")
             compose.onNodeWithContentDescription("Back to workout home").performClick()
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()

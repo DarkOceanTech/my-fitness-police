@@ -51,7 +51,7 @@ class DashboardChartsTest {
         screenshot("sets-chart")
         compose.onNodeWithTag("weekly-Sets-insights").performScrollTo().performClick()
         compose.onNodeWithTag("weekly-Sets-info").assertTextEquals(
-            "Recorded sets in workouts started this week, Monday–Sunday. Includes warmup and working sets.")
+            "Recorded sets in workouts started this week, Monday–Sunday. Includes Warm-up and working sets.")
         screenshot("sets-insights")
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithTag("weekly-progress-cards").performTouchInput { swipeLeft() }

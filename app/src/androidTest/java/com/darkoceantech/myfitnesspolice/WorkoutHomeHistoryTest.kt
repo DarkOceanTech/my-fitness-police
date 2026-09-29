@@ -108,11 +108,11 @@ class WorkoutHomeHistoryTest {
             waitFor("1 sets · 8 reps")
             compose.onNodeWithTag("history-workout-$id").performClick()
             compose.onNodeWithText("Delete workout").assertDoesNotExist()
-            compose.onNodeWithContentDescription("History options").performClick()
+            compose.onNodeWithContentDescription("Workout Log options").performClick()
             compose.onNodeWithText("Delete workout").performClick()
             compose.onNodeWithText("Cancel").performClick()
             runBlocking { assertNotNull(db.workoutDao().getDetails(id)) }
-            compose.onNodeWithContentDescription("History options").performClick()
+            compose.onNodeWithContentDescription("Workout Log options").performClick()
             compose.onNodeWithText("Delete workout").performClick()
             compose.onNodeWithText("Delete", substring = false).performClick()
             waitFor("No completed workouts yet")

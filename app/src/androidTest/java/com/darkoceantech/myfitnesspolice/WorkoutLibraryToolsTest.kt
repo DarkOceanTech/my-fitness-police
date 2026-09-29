@@ -66,11 +66,19 @@ class WorkoutLibraryToolsTest {
             compose.onNodeWithTag("exercise-picker-list").performScrollToNode(hasTestTag("select-exercise-${added.id}"))
             screenshot("picker-new-exercise")
             compose.onNodeWithTag("select-exercise-${added.id}").performClick()
+            compose.waitUntil(8000) { compose.onAllNodesWithTag("remove-exercise-${added.id}").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Back to workout").performClick()
             compose.waitUntil(8000) { compose.onAllNodesWithTag("exercise-picker-search").fetchSemanticsNodes().isEmpty() }
             builderScroll("save-workout")
             compose.onNodeWithTag("save-workout").assertIsEnabled()
             compose.onNodeWithText("Edit workout").assertIsDisplayed()
+            runBlocking {
+                assertEquals(1, db.workoutDao().getDetails(planId)!!.exercises.size)
+                assertEquals(2, db.workoutDao().getDetails(WorkoutEditorRepository.editId(planId))!!.exercises.size)
+            }
             compose.onNodeWithContentDescription("Back to workout home").performClick()
+            compose.onNodeWithTag("save-workout-and-exit").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("home-plan-$planId").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("gym-section-exercises").performClick()
             compose.onNodeWithTag("exercise-catalog").performScrollToNode(hasText("Cable row"))
             compose.onNodeWithText("Cable row").assertIsDisplayed()
@@ -107,9 +115,10 @@ class WorkoutLibraryToolsTest {
                 repo.observeWorkout(draft.workout.id).first()!!
             }
             val planId = plan.workout.id
-            val entryId = plan.exercises.single().workoutExercise.id
+            val editId = WorkoutEditorRepository.editId(planId)
             compose.setContent { MyFitnessPoliceTheme { MyFitnessPoliceApp(repo) } }
             openWorkout(planId)
+            val entryId = runBlocking { db.workoutDao().getDetails(editId)!!.exercises.single().workoutExercise.id }
             builderScroll("save-workout")
             compose.onNodeWithTag("save-workout").assertIsNotEnabled()
             compose.onNodeWithContentDescription("Expand Curl").performScrollTo().performClick()
@@ -119,23 +128,28 @@ class WorkoutLibraryToolsTest {
             assertTrue(copy.left > add.right)
             assertEquals(add.top, copy.top, 1f)
             compose.onNodeWithTag("copy-last-set-$entryId").performClick()
-            compose.waitUntil(5000) { runBlocking { repo.observeWorkout(planId).first()!!.orderedSets().size == 3 } }
+            compose.waitUntil(5000) { runBlocking { repo.observeWorkout(editId).first()!!.orderedSets().size == 3 } }
+            runBlocking { assertEquals(plan.orderedSets(), repo.observeWorkout(planId).first()!!.orderedSets()) }
             builderScroll("copy-last-set-$entryId")
             compose.onNodeWithContentDescription("Weight set 3").assertTextEquals("65")
             compose.onNodeWithContentDescription("Reps set 3").assertTextEquals("12")
-            compose.onNodeWithContentDescription("Modifier set 3").assertTextEquals("Ss")
+            compose.onNodeWithContentDescription("Modifier set 3").assertTextEquals("S")
             compose.onNodeWithContentDescription("Type set 3").assertTextEquals("Wu")
             screenshot("copied-set")
             builderScroll("save-workout")
             compose.onNodeWithTag("save-workout").assertIsEnabled().performClick()
             compose.onNodeWithTag("confirm-save-workout").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("plan-saved").fetchSemanticsNodes().isNotEmpty() }
+            builderScroll("save-workout")
             compose.onNodeWithTag("save-workout").assertIsNotEnabled()
             db.close()
             db = open()
             runBlocking {
                 val sets = db.workoutDao().getDetails(planId)!!.orderedSets()
-                assertEquals(plan.orderedSets(), sets.take(2))
+                // A commit gives the saved plan independent rows; existing prescriptions stay identical.
+                plan.orderedSets().zip(sets.take(2)).forEach { (before, after) ->
+                    assertEquals(before.copy(id = after.id, workoutExerciseId = after.workoutExerciseId), after)
+                }
                 assertEquals(3, sets.map { it.id }.distinct().size)
                 assertEquals(listOf(0, 1, 2), sets.map { it.position })
                 assertEquals(12, sets.last().reps)
@@ -155,6 +169,7 @@ class WorkoutLibraryToolsTest {
         compose.waitUntil(8000) { compose.onAllNodesWithTag("home-plan-$id").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("home-plan-$id").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithText("Edit workout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Expand Curl").fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun builderScroll(tag: String) {

@@ -90,7 +90,8 @@ class WorkoutPlanLifecycleTest {
             val planId = draft.workout.id
             repo.savePlan(planId)
             val sessionId = repo.startPlan(planId)
-            assertEquals(sessionId, repo.startPlan(planId))
+            assertTrue(runCatching { repo.startPlan(planId) }.isFailure)
+            repo.sessionProgress.ensureSession(sessionId)
             val session = repo.observeWorkout(sessionId).first()!!
             val entry = session.exercises.single()
             val set = entry.sets.single()
@@ -102,7 +103,8 @@ class WorkoutPlanLifecycleTest {
             db.close()
             db = open()
             repo = FitnessRepository(db)
-            assertEquals(sessionId, repo.startPlan(planId))
+            assertTrue(runCatching { repo.startPlan(planId) }.isFailure)
+            repo.sessionProgress.ensureSession(sessionId)
             assertEquals(7, repo.observeWorkout(sessionId).first()!!.exercises.single().sets.single().reps)
             repo.finishWorkout(sessionId)
             repo.deleteWorkout(sessionId)

@@ -35,6 +35,7 @@ class WorkoutEditorTest {
             repo.savePlan(id)
             id
         }
+        val editId = WorkoutEditorRepository.editId(planId)
         try {
             compose.setContent { MyFitnessPoliceTheme { MyFitnessPoliceApp(repo) } }
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()
@@ -42,6 +43,7 @@ class WorkoutEditorTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("home-plan-$planId").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("home-plan-$planId").performScrollTo().performClick()
             waitFor("Edit workout")
+            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Expand Curl").fetchSemanticsNodes().isNotEmpty() }
             fun saveControl() = compose.onNodeWithTag("workout-builder").performScrollToNode(hasTestTag("save-workout"))
             saveControl()
             compose.onNodeWithTag("save-workout").assertIsNotEnabled()
@@ -66,8 +68,11 @@ class WorkoutEditorTest {
             editName()
             captureFilterReview(compose, "edit-details-modal")
             compose.onNodeWithTag("save-workout-details").performClick()
-            waitFor("Arm strength")
-            runBlocking { assertEquals("Arm strength", repo.observeWorkout(planId).first()!!.workout.name) }
+            compose.waitUntil(5000) { runBlocking { repo.observeWorkout(editId).first()!!.workout.name == "Arm strength" } }
+            runBlocking {
+                assertEquals("Arm strength", repo.observeWorkout(editId).first()!!.workout.name)
+                assertEquals("", repo.observeWorkout(planId).first()!!.workout.name)
+            }
             saveControl()
             compose.onNodeWithTag("save-workout").assertIsEnabled().performClick()
             compose.onNodeWithTag("confirm-save-workout").performClick()
@@ -79,12 +84,16 @@ class WorkoutEditorTest {
             compose.onNodeWithContentDescription("Dismiss saved notification").performClick()
             saveControl()
             compose.onNodeWithTag("save-workout").assertIsNotEnabled()
+            runBlocking { assertEquals("Arm strength", repo.observeWorkout(planId).first()!!.workout.name) }
 
-            // Room updates must enable Save, while restoring the last saved value disables it again.
-            val noteEntry = runBlocking { repo.observeWorkout(planId).first()!!.orderedExercises().first().workoutExercise.id }
-            runBlocking { repo.updateExerciseNote(planId, noteEntry, "Keep elbows close") }
+            // Room updates to the isolated editor enable Save, while reverting to the saved value disables it again.
+            val noteEntry = runBlocking { repo.observeWorkout(editId).first()!!.orderedExercises().first().workoutExercise.id }
+            runBlocking { repo.updateExerciseNote(editId, noteEntry, "Keep elbows close") }
             compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("save-workout") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
-            runBlocking { repo.updateExerciseNote(planId, noteEntry, "") }
+            runBlocking {
+                assertEquals("", repo.observeWorkout(planId).first()!!.orderedExercises().first().workoutExercise.notes)
+                repo.updateExerciseNote(editId, noteEntry, "")
+            }
             compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("save-workout") and isNotEnabled()).fetchSemanticsNodes().isNotEmpty() }
 
             compose.onNodeWithTag("workout-builder").performScrollToNode(hasTestTag("toggle-all-exercises"))
@@ -109,11 +118,16 @@ class WorkoutEditorTest {
                 up()
             }
             compose.waitUntil(5000) {
-                runBlocking { repo.observeWorkout(planId).first()!!.orderedExercises().first().exercise.name == "Row" }
+                runBlocking { repo.observeWorkout(editId).first()!!.orderedExercises().first().exercise.name == "Row" }
             }
+            runBlocking { assertEquals(listOf("Curl", "Row"), repo.observeWorkout(planId).first()!!.orderedExercises().map { it.exercise.name }) }
             compose.onNodeWithContentDescription("Expand Curl").performClick()
             compose.onNodeWithTag("workout-builder").performScrollToNode(hasText("Add Set"))
             compose.onNodeWithText("Add Set").assertIsDisplayed()
+            saveControl()
+            compose.onNodeWithTag("save-workout").assertIsEnabled().performClick()
+            compose.onNodeWithTag("confirm-save-workout").performClick()
+            waitFor("Saved")
 
             runBlocking {
                 db.close()

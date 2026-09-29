@@ -35,11 +35,13 @@ private enum class GymSection(val title: String, val testTag: String) {
 
 @Composable
 fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel, modifier: Modifier = Modifier,
-    onFinished: (String) -> Unit = {}) {
+    onFinished: (String) -> Unit = {}, trainingVisible: Boolean? = null, onTrainingVisibleChange: (Boolean) -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
     var savedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var training by rememberSaveable { mutableStateOf(false) }
+    var localTraining by rememberSaveable { mutableStateOf(false) }
+    val training = trainingVisible ?: localTraining
+    fun showTraining(value: Boolean) { localTraining = value; onTrainingVisibleChange(value) }
     var logger by rememberSaveable { mutableStateOf(false) }
     var section by rememberSaveable { mutableStateOf(GymSection.Exercises) }
     var trainingPlanId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -49,7 +51,7 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
         if (action.saving) return
         model.clearError()
         when {
-            training -> training = false
+            training -> showTraining(false)
             savedId != null -> savedId = null
             logger -> logger = false
             trainingEditor -> trainingEditor = false
@@ -59,13 +61,14 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     BackHandler(logger || savedId != null || training || trainingEditor || trainingPlanId != null) { back() }
     LaunchedEffect(action.revision) {
         if (requestedStart && action.completedAction == "start-training") {
-            requestedStart = false; training = true
+            requestedStart = false; showTraining(true)
         }
         if (action.completedAction == "delete-training-plan") { trainingEditor = false; trainingPlanId = null }
     }
     val selectedTraining = state.trainingPlans.firstOrNull { it.plan.id == trainingPlanId }
+    val activeSession = state.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
     if (training) ActiveWorkoutScreen(model, modifier,
-        onBack = { training = false }, onFinished = { id -> training = false; onFinished(id) })
+        onBack = { showTraining(false) }, onFinished = { id -> showTraining(false); onFinished(id) })
     else if (savedId != null) key(savedId) {
         WorkoutBuilderScreen(model, exercisesModel, modifier, planId = savedId, onBack = { back() },
             onSaved = { savedId = null }, onDeleted = { savedId = null })
@@ -81,11 +84,16 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     }
     else if (trainingEditor) TrainingPlanEditorScreen(selectedTraining, state.sessions, action, modifier,
         onBack = { back() }, onSaved = { trainingEditor = false; section = GymSection.Plan },
-        onWorkouts = { trainingEditor = false; trainingPlanId = null; section = GymSection.Workouts }, onSave = model::saveTrainingPlan)
+        onWorkouts = { trainingEditor = false; trainingPlanId = null; section = GymSection.Workouts },
+        onSave = model::saveTrainingPlanItems, exercises = state.exercises)
     else if (selectedTraining != null) TrainingPlanDetailScreen(selectedTraining, state.sessions, action, modifier,
+        hasActiveSession = activeSession != null,
         onBack = { back() }, onEdit = { model.clearError(); trainingEditor = true },
         onStart = { model.clearError(); requestedStart = true; model.startTraining(selectedTraining.plan.id) },
-        onWorkout = { model.clearError(); savedId = it }, onDelete = { model.deleteTrainingPlan(selectedTraining.plan.id) })
+        onWorkout = { model.clearError(); savedId = it }, onDelete = { model.deleteTrainingPlan(selectedTraining.plan.id) },
+        exercises = state.exercises, onSaveItems = { items ->
+            model.saveTrainingPlanItems(selectedTraining.plan.id, selectedTraining.plan.name, items, selectedTraining.plan.dayOfWeek)
+        })
     else if (section == GymSection.Exercises) {
         val exercises by exercisesModel.state.collectAsStateWithLifecycle()
         val form by exercisesModel.form.collectAsStateWithLifecycle()
@@ -94,24 +102,21 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
                 GymSectionTabs(section, onSection = { section = it },
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp),
                     enabled = !form.saving)
-            })
+            }, onUpdate = exercisesModel::updateExercise)
     } else {
         WorkoutHomeScreen(modifier, onAddWorkout = { logger = true },
         section = section, onSection = { section = it }, trainingPlans = state.trainingPlans,
         onAddTraining = { model.clearError(); trainingPlanId = null; trainingEditor = true },
         onTrainingPlan = { model.clearError(); trainingPlanId = it },
         loading = state.loading, failed = state.failed, onRetry = model::retry,
-        saved = state.sessions.filter { it.workout.kind == "plan" }, onSavedWorkout = { savedId = it },
-        hasActiveSession = state.sessions.any { it.workout.kind == "session" && it.workout.finishedAt == null },
-        onResume = { training = true })
+        saved = state.sessions.filter { it.workout.kind == "plan" }, exercises = state.exercises, onSavedWorkout = { savedId = it })
     }
 }
 
 @Composable
 private fun WorkoutHomeScreen(modifier: Modifier, onAddWorkout: () -> Unit, loading: Boolean, failed: Boolean, onRetry: () -> Unit,
     section: GymSection, onSection: (GymSection) -> Unit, trainingPlans: List<TrainingPlanDetails>, onAddTraining: () -> Unit, onTrainingPlan: (String) -> Unit,
-    saved: List<WorkoutDetails>, onSavedWorkout: (String) -> Unit,
-    hasActiveSession: Boolean, onResume: () -> Unit) {
+    saved: List<WorkoutDetails>, exercises: List<Exercise>, onSavedWorkout: (String) -> Unit) {
     val workoutGroups = remember(saved) { groupWorkoutsByMuscle(saved) }
     LazyColumn(modifier.testTag("workout-home"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item(key = "gym-tabs") {
@@ -122,7 +127,7 @@ private fun WorkoutHomeScreen(modifier: Modifier, onAddWorkout: () -> Unit, load
                 horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(if (section == GymSection.Workouts)
                     "Create workout variations\nfor a body part, like Biceps — Light\nor Biceps — Strength."
-                    else "Build your day with workouts like\nBiceps — Light, Back — Rows Only,\nand Abs — Light Reps.",
+                    else "Build your day with saved workouts\nand individual exercises, arranged\nin your preferred training order.",
                     modifier = Modifier.weight(1f), minLines = 3,
                     style = MaterialTheme.typography.bodyMedium, color = PoliceColors.Muted)
                 PoliceIconButton(onClick = if (section == GymSection.Workouts) onAddWorkout else onAddTraining,
@@ -130,9 +135,6 @@ private fun WorkoutHomeScreen(modifier: Modifier, onAddWorkout: () -> Unit, load
                     Icon(painterResource(R.drawable.ic_add), contentDescription = if (section == GymSection.Workouts) "Add workout" else "Add training plan")
                 }
             }
-        }
-        if (hasActiveSession) item {
-            PoliceButton(onClick = onResume, modifier = Modifier.fillMaxWidth()) { Text("Resume workout") }
         }
         if (loading) item(key = "loading-plans") {
             Box(Modifier.fillMaxWidth().heightIn(min = 136.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -144,7 +146,7 @@ private fun WorkoutHomeScreen(modifier: Modifier, onAddWorkout: () -> Unit, load
                 EmptyGymListButton("Create My First Plan", "create-first-training-plan", onAddTraining)
             }
             trainingPlans.forEach { details -> item(key = "training-${details.plan.id}") {
-                TrainingPlanCard(details, saved) { onTrainingPlan(details.plan.id) }
+                TrainingPlanCard(details, saved, exercises = exercises) { onTrainingPlan(details.plan.id) }
             } }
         } else if (workoutGroups.isEmpty()) item(key = "first-workout") {
             EmptyGymListButton("Create My First Workout", "create-first-workout", onAddWorkout)

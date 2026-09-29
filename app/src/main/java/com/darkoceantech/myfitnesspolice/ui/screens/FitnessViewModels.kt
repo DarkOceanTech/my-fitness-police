@@ -39,7 +39,15 @@ class ExercisesViewModel(private val repository: FitnessRepository) :
 
     fun resetForm() { if (!_form.value.saving) _form.value = ExerciseFormState() }
 
-    fun addExercise(name: String, equipment: String, description: String, primaryMuscles: String, secondaryMuscles: String) {
+    fun addExercise(name: String, equipment: String, description: String, primaryMuscles: String, secondaryMuscles: String) =
+        saveExercise(null, name, equipment, description, primaryMuscles, secondaryMuscles)
+
+    fun updateExercise(id: String, name: String, equipment: String, description: String,
+        primaryMuscles: String, secondaryMuscles: String) =
+        saveExercise(id, name, equipment, description, primaryMuscles, secondaryMuscles)
+
+    private fun saveExercise(id: String?, name: String, equipment: String, description: String,
+        primaryMuscles: String, secondaryMuscles: String) {
         if (_form.value.saving) return
         if (name.isBlank()) {
             _form.value = ExerciseFormState(error = "Enter an exercise name.")
@@ -52,10 +60,13 @@ class ExercisesViewModel(private val repository: FitnessRepository) :
         _form.value = ExerciseFormState(saving = true)
         viewModelScope.launch {
             try {
-                repository.addExercise(name, equipment, description, primaryMuscles, secondaryMuscles)
+                if (id == null) repository.addExercise(name, equipment, description, primaryMuscles, secondaryMuscles)
+                else repository.updateExercise(id, name, equipment, description, primaryMuscles, secondaryMuscles)
                 _form.value = ExerciseFormState(saved = true)
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (invalid: IllegalArgumentException) {
+                _form.value = ExerciseFormState(error = invalid.message ?: "Check the exercise details.")
             } catch (_: Exception) {
                 _form.value = ExerciseFormState(error = "Could not save the exercise. Please try again.")
             }

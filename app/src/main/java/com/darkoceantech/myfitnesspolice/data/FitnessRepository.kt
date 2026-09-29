@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.first
 class FitnessRepository(private val database: FitnessDatabase) {
     val sessionProgress = WorkoutSessionRepository(database)
     val trainingPlans = TrainingPlanRepository(database)
+    val workoutEditor = WorkoutEditorRepository(database)
 
     private suspend fun recordedWorkout(id: String): WorkoutDetails =
         requireNotNull(database.workoutDao().getDetails(id)) { "This workout is no longer available." }.also {
@@ -19,8 +20,43 @@ class FitnessRepository(private val database: FitnessDatabase) {
         database.workoutDao().update(workout.workout.copy(name = trimmed))
     }
 
-    suspend fun correctHistorySet(workoutId: String, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?) = database.withTransaction {
-        correctRecordedSet(recordedWorkout(workoutId), setId, weightGrams, plannedReps, actualReps, rpe)
+    suspend fun groupHistoryWorkouts(ids: List<String>, trainingPlanId: String? = null,
+        newPlanName: String? = null): String = database.withTransaction {
+        require(ids.isNotEmpty()) { "Select at least one recorded workout." }
+        require(ids.distinct().size == ids.size) { "Each recorded workout can only be selected once." }
+        val workouts = ids.map { recordedWorkout(it).workout }
+        val plan = if (trainingPlanId != null) {
+            require(newPlanName.isNullOrBlank()) { "Choose an existing plan or enter a new plan name." }
+            requireNotNull(database.trainingPlanDao().get(trainingPlanId)) {
+                "The selected training plan is no longer available."
+            }.plan
+        } else {
+            val name = newPlanName?.trim().orEmpty()
+            require(name.isNotEmpty()) { "Enter a training plan name." }
+            TrainingPlan(name = name).also { database.trainingPlanDao().insert(it) }
+        }
+        val historyGroupId = java.util.UUID.randomUUID().toString()
+        // A fresh batch keeps repeated uses of the same plan separate. Recorded rows remain independent.
+        workouts.forEach { workout -> database.workoutDao().update(workout.copy(
+            sourceTrainingPlanId = plan.id, trainingPlan = plan.name, historyGroupId = historyGroupId)) }
+        plan.id
+    }
+
+    suspend fun replaceHistoryExercise(workoutId: String, entryId: String, newExerciseId: String) = database.withTransaction {
+        val workout = recordedWorkout(workoutId)
+        val entry = requireNotNull(workout.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is not in the selected workout."
+        }
+        val replacement = requireNotNull(database.exerciseDao().get(newExerciseId)) {
+            "The selected exercise is no longer available."
+        }
+        require(!replacement.isArchived) { "Choose an exercise that has not been archived." }
+        // Keep the recorded entry and its children intact; only correct the catalog association.
+        database.workoutExerciseDao().update(entry.workoutExercise.copy(exerciseId = replacement.id))
+    }
+
+    suspend fun correctHistorySet(workoutId: String, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?, isWarmup: Boolean? = null) = database.withTransaction {
+        correctRecordedSet(recordedWorkout(workoutId), setId, weightGrams, plannedReps, actualReps, rpe, isWarmup)
     }
 
     private suspend fun activeWorkout(id: String): WorkoutDetails =
@@ -28,8 +64,8 @@ class FitnessRepository(private val database: FitnessDatabase) {
             require(it.workout.kind == "session" && it.workout.finishedAt == null) { "Select an active workout." }
         }
 
-    suspend fun correctActiveSet(workoutId: String, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?) = database.withTransaction {
-        correctRecordedSet(activeWorkout(workoutId), setId, weightGrams, plannedReps, actualReps, rpe)
+    suspend fun correctActiveSet(workoutId: String, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?, isWarmup: Boolean? = null) = database.withTransaction {
+        correctRecordedSet(activeWorkout(workoutId), setId, weightGrams, plannedReps, actualReps, rpe, isWarmup)
     }
 
     private fun recordedSet(workout: WorkoutDetails, setId: String): WorkoutSet {
@@ -39,7 +75,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
         return set
     }
 
-    private suspend fun correctRecordedSet(workout: WorkoutDetails, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?) {
+    private suspend fun correctRecordedSet(workout: WorkoutDetails, setId: String, weightGrams: Long?, plannedReps: Int, actualReps: Int, rpe: Int?, isWarmup: Boolean? = null) {
         require(weightGrams == null || weightGrams >= 0) { "Weight cannot be negative." }
         require(plannedReps > 0) { "Planned reps must be positive." }
         require(actualReps >= 0) { "Actual reps cannot be negative." }
@@ -47,7 +83,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
         val set = recordedSet(workout, setId)
         // Patch only this session's recorded set. Notes, timers, and the source workout remain intact.
         database.workoutSetDao().update(set.copy(weightGrams = weightGrams ?: set.weightGrams,
-            reps = plannedReps, actualReps = actualReps, rpe = rpe))
+            reps = plannedReps, actualReps = actualReps, rpe = rpe, isWarmup = isWarmup ?: set.isWarmup))
     }
 
     suspend fun saveHistorySetNote(workoutId: String, setId: String, notes: String) = database.withTransaction {
@@ -63,6 +99,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
     suspend fun deletePlan(id: String) = database.withTransaction {
         val workout = database.workoutDao().getDetails(id)?.workout ?: return@withTransaction
         require(workout.kind == "plan") { "Only a saved workout plan can be deleted here." }
+        workoutEditor.discard(id)
         // Plan children cascade; copied sessions and their sourcePlanId reference remain independent.
         database.workoutDao().delete(id)
     }
@@ -93,7 +130,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
 
     private suspend fun editablePlan(id: String?): Workout {
         if (id != null) return requireNotNull(database.workoutDao().getDetails(id)).workout.also {
-            require(it.kind == "plan" || it.kind == "draft")
+            require(it.kind in listOf("plan", "draft", "edit"))
         }
         val draft = observeSessions().first().firstOrNull { it.workout.kind == "draft" }?.workout
         return draft ?: Workout(kind = "draft").also { database.workoutDao().insert(it) }
@@ -101,10 +138,12 @@ class FitnessRepository(private val database: FitnessDatabase) {
     suspend fun setWorkoutDetails(field: String, value: String, planId: String? = null) = database.withTransaction {
         val old = editablePlan(planId)
         if (field == "trainingPlans") {
+            require(old.kind != "edit") { "Edit training plan membership on the training plan page." }
             trainingPlans.assignWorkout(old.id, value.split(',').filter { it.isNotBlank() })
             return@withTransaction
         }
         if (field == "plan") {
+            require(old.kind != "edit") { "Edit training plan membership on the training plan page." }
             trainingPlans.assignLegacyName(old.id, value)
             return@withTransaction
         }
@@ -122,18 +161,18 @@ class FitnessRepository(private val database: FitnessDatabase) {
     suspend fun saveMetadata(planId: String, muscles: String, day: String, trainingPlan: String) = database.withTransaction {
         val old = editablePlan(planId)
         database.workoutDao().update(old.copy(targetMuscles = muscles, dayOfWeek = day, trainingPlan = trainingPlan))
-        trainingPlans.assignLegacyName(old.id, trainingPlan)
+        if (old.kind != "edit") trainingPlans.assignLegacyName(old.id, trainingPlan)
     }
 
     suspend fun saveWorkoutDetails(id: String, name: String, muscles: String, day: String, trainingIds: List<String>) = database.withTransaction {
         val old = editablePlan(id)
         database.workoutDao().update(old.copy(name = name.trim(), targetMuscles = muscles, dayOfWeek = day))
-        trainingPlans.assignWorkout(id, trainingIds)
+        if (old.kind != "edit") trainingPlans.assignWorkout(id, trainingIds)
     }
 
     suspend fun reorderExercises(workoutId: String, orderedIds: List<String>) = database.withTransaction {
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
-        require(details.workout.kind in listOf("plan", "draft"))
+        require(details.workout.kind in listOf("plan", "draft", "edit"))
         val entries = details.exercises.map { it.workoutExercise }.associateBy { it.id }
         require(orderedIds.size == entries.size && orderedIds.toSet() == entries.keys) {
             "The exercise list changed. Please try again."
@@ -151,7 +190,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
     }
     suspend fun removeWorkoutExercise(workoutId: String, entryId: String) = database.withTransaction {
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
-        require(details.workout.kind in listOf("draft", "plan")) { "Only workout plans can be edited here." }
+        require(details.workout.kind in listOf("draft", "plan", "edit")) { "Only workout plans can be edited here." }
         require(details.exercises.any { it.workoutExercise.id == entryId }) { "This exercise is no longer in the workout." }
         // The foreign key cascades to this card's sets, never to the catalog or copied sessions.
         database.workoutExerciseDao().delete(entryId)
@@ -160,14 +199,20 @@ class FitnessRepository(private val database: FitnessDatabase) {
 
     suspend fun chooseExercise(exerciseId: String, planId: String? = null) = database.withTransaction {
         val workout = editablePlan(planId)
+        val existing = requireNotNull(database.workoutDao().getDetails(workout.id))
+        if (existing.exercises.any { it.exercise.id == exerciseId }) return@withTransaction
         addWorkoutExercise(workout.id, exerciseId)
         val entry = database.workoutDao().getDetails(workout.id)!!.exercises.maxBy { it.workoutExercise.position }
         saveSet(workout.id, entry.workoutExercise.id, null, 10, 0)
     }
 
     suspend fun savePlan(id: String, name: String? = null) = database.withTransaction {
+        if (database.workoutDao().getDetails(id)?.workout?.kind == "edit") {
+            workoutEditor.commit(id, name)
+            return@withTransaction
+        }
         val details = requireNotNull(database.workoutDao().getDetails(id))
-        require(details.workout.kind in listOf("draft", "plan"))
+        require(details.workout.kind in listOf("draft", "plan", "edit"))
         require(details.exercises.any { it.sets.isNotEmpty() }) { "Add at least one set before saving." }
         database.workoutDao().update(details.workout.copy(kind = "plan", finishedAt = null,
             name = name?.trim() ?: details.workout.name))
@@ -175,31 +220,53 @@ class FitnessRepository(private val database: FitnessDatabase) {
 
     suspend fun startTraining(id: String): String = database.withTransaction {
         val plan = requireNotNull(database.trainingPlanDao().get(id)) { "This training plan is no longer available." }
-        val active = database.workoutDao().observeUnfinished().first().firstOrNull()
-        if (active != null) {
-            require(active.sourceTrainingPlanId == id) { "Resume or finish your current session before starting another plan." }
-            sessionProgress.prepareSession(active.id)
-            return@withTransaction active.id
-        }
-        val modules = plan.workoutIds().map { workoutId ->
-            requireNotNull(database.workoutDao().getDetails(workoutId)) { "A workout in this plan is no longer available." }.also {
+        requireNoUnfinishedSession()
+        val items = plan.orderedItems()
+        require(items.isNotEmpty()) { "Add at least one workout or exercise before starting." }
+        val modules = items.filterIsInstance<TrainingPlanItem.WorkoutItem>().associate { item ->
+            item.workoutId to requireNotNull(database.workoutDao().getDetails(item.workoutId)) {
+                "A workout in this plan is no longer available."
+            }.also {
                 require(it.workout.kind == "plan") { "Save every workout before starting training." }
+                require(it.plannedSets() > 0) { "Add at least one set to every included workout before starting." }
             }
         }
-        require(modules.isNotEmpty() && modules.all { it.plannedSets() > 0 }) { "Add at least one set to every included workout before starting." }
+        val direct = plan.exerciseMembers.associateBy { it.member.exerciseId }
+        items.filterIsInstance<TrainingPlanItem.ExerciseItem>().forEach { item ->
+            require(direct[item.exerciseId] != null) { "An exercise in this plan is no longer available." }
+            require(item.sets.isNotEmpty()) { "Add at least one set to each direct exercise before starting." }
+        }
+        val targets = items.flatMap { item -> when (item) {
+            is TrainingPlanItem.WorkoutItem -> modules.getValue(item.workoutId).workout.targetMuscles.split(',')
+            is TrainingPlanItem.ExerciseItem -> listOf(direct.getValue(item.exerciseId).exercise.mainMuscleGroup().label)
+        } }.filter { it.isNotBlank() }.distinct().joinToString(",")
         val session = Workout(kind = "session", sourceTrainingPlanId = id, name = plan.plan.name,
-            dayOfWeek = plan.plan.dayOfWeek, trainingPlan = plan.plan.name,
-            targetMuscles = modules.flatMap { it.workout.targetMuscles.split(',') }.filter { it.isNotBlank() }.distinct().joinToString(","))
+            dayOfWeek = plan.plan.dayOfWeek, trainingPlan = plan.plan.name, targetMuscles = targets)
         database.workoutDao().insert(session)
-        modules.flatMap { it.orderedExercises() }.filter { it.sets.isNotEmpty() }.forEachIndexed { position, entry ->
-            val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id, position = position)
-            database.workoutExerciseDao().insert(exercise)
-            entry.sets.sortedBy { it.position }.forEach { set ->
-                database.workoutSetDao().insert(set.copy(id = java.util.UUID.randomUUID().toString(),
-                    workoutExerciseId = exercise.id, completedAt = null, actualReps = null, rpe = null,
-                    activeMillis = 0, restMillis = 0))
+        var position = 0
+        items.forEach { item -> when (item) {
+            is TrainingPlanItem.WorkoutItem -> {
+                val source = modules.getValue(item.workoutId)
+                source.orderedExercises().filter { it.sets.isNotEmpty() }.forEach { entry ->
+                    val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id,
+                        position = position++, sourceWorkoutId = source.workout.id, sourceWorkoutName = source.workout.displayName())
+                    database.workoutExerciseDao().insert(exercise)
+                    entry.sets.sortedBy { it.position }.forEach { set ->
+                        database.workoutSetDao().insert(set.copy(id = java.util.UUID.randomUUID().toString(),
+                            workoutExerciseId = exercise.id, completedAt = null, actualReps = null, rpe = null,
+                            activeMillis = 0, restMillis = 0))
+                    }
+                }
             }
-        }
+            is TrainingPlanItem.ExerciseItem -> {
+                val exercise = WorkoutExercise(workoutId = session.id, exerciseId = item.exerciseId, position = position++)
+                database.workoutExerciseDao().insert(exercise)
+                item.sets.forEachIndexed { setPosition, set ->
+                    database.workoutSetDao().insert(WorkoutSet(workoutExerciseId = exercise.id, position = setPosition,
+                        reps = set.reps, weightGrams = set.weightGrams, isWarmup = set.isWarmup, modifier = set.modifier))
+                }
+            }
+        } }
         sessionProgress.prepareSession(session.id)
         session.id
     }
@@ -208,17 +275,13 @@ class FitnessRepository(private val database: FitnessDatabase) {
         val plan = requireNotNull(database.workoutDao().getDetails(id))
         require(plan.workout.kind == "plan") { "Save this plan before starting." }
         require(plan.exercises.any { it.sets.isNotEmpty() }) { "Add at least one set before starting." }
-        val active = database.workoutDao().observeUnfinished().first().firstOrNull()
-        if (active != null) {
-            require(active.sourcePlanId == id) { "Finish your current session before starting another plan." }
-            sessionProgress.ensureSession(active.id)
-            return@withTransaction active.id
-        }
+        requireNoUnfinishedSession()
         val session = plan.workout.copy(id = java.util.UUID.randomUUID().toString(),
             kind = "session", sourcePlanId = id, startedAt = System.currentTimeMillis(), finishedAt = null)
         database.workoutDao().insert(session)
         plan.orderedExercises().forEach { entry ->
-            val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id)
+            val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id,
+                sourceWorkoutId = plan.workout.id, sourceWorkoutName = plan.workout.displayName())
             database.workoutExerciseDao().insert(exercise)
             entry.sets.forEach { set ->
                 database.workoutSetDao().insert(set.copy(id = java.util.UUID.randomUUID().toString(),
@@ -239,7 +302,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
 
     suspend fun saveEquipmentPositions(workoutId: String, entryId: String, positions: List<EquipmentPosition>) = database.withTransaction {
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
-        require(details.workout.kind in listOf("plan", "draft") ||
+        require(details.workout.kind in listOf("plan", "draft", "edit") ||
             (details.workout.kind == "session" && details.workout.finishedAt == null)) {
             "Equipment setup can be edited on a saved workout or an active session."
         }
@@ -260,15 +323,20 @@ class FitnessRepository(private val database: FitnessDatabase) {
     }
     suspend fun deleteWorkout(id: String) = database.withTransaction {
         val workout = database.workoutDao().getDetails(id)?.workout ?: return@withTransaction
-        require(workout.finishedAt != null) { "Only completed workouts can be deleted from history." }
+        require(workout.finishedAt != null) { "Only completed workouts can be deleted from Workout Log." }
         database.workoutDao().delete(id)
     }
     fun observeSessions() = database.workoutDao().observeAllDetails()
 
-    suspend fun startWorkout() = database.withTransaction {
-        if (database.workoutDao().observeUnfinished().first().isEmpty()) {
-            database.workoutDao().insert(Workout())
+    private suspend fun requireNoUnfinishedSession() {
+        require(database.workoutDao().observeUnfinished().first().isEmpty()) {
+            "A workout is already in progress. Return to your current session before starting another."
         }
+    }
+
+    suspend fun startWorkout() = database.withTransaction {
+        requireNoUnfinishedSession()
+        database.workoutDao().insert(Workout())
     }
 
     suspend fun addWorkoutExercise(workoutId: String, exerciseId: String) = database.withTransaction {
@@ -314,10 +382,17 @@ class FitnessRepository(private val database: FitnessDatabase) {
     }
 
     suspend fun deleteSet(workoutId: String, entryId: String, setId: String) = database.withTransaction {
+        editablePlan(workoutId)
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
-        val entry = details.exercises.single { it.workoutExercise.id == entryId }
-        require(entry.sets.any { it.id == setId })
+        val entry = requireNotNull(details.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is no longer in the workout."
+        }
+        require(entry.sets.any { it.id == setId }) { "This set is no longer in the workout." }
         database.workoutSetDao().delete(setId)
+        // Ascending compaction only fills earlier, now-empty positions, preserving the unique index.
+        entry.sets.filterNot { it.id == setId }.sortedBy { it.position }.forEachIndexed { index, set ->
+            if (set.position != index) database.workoutSetDao().update(set.copy(position = index))
+        }
     }
 
     suspend fun finishWorkout(id: String) = database.withTransaction {
@@ -342,6 +417,18 @@ class FitnessRepository(private val database: FitnessDatabase) {
         primaryMuscles: String = "", secondaryMuscles: String = "") {
         require(name.isNotBlank()) { "Enter an exercise name." }
         database.exerciseDao().insert(Exercise(name = name.trim(), equipment = equipment.trim(),
+            description = description.trim(), primaryMuscles = primaryMuscles.trim(),
+            secondaryMuscles = secondaryMuscles.trim()))
+    }
+
+    suspend fun updateExercise(id: String, name: String, equipment: String, description: String,
+        primaryMuscles: String, secondaryMuscles: String) = database.withTransaction {
+        require(name.isNotBlank()) { "Enter an exercise name." }
+        val original = requireNotNull(database.exerciseDao().get(id)) {
+            "This exercise is no longer available. Close the form and refresh your exercise list."
+        }
+        // Update the shared catalog row in place: plans and recorded sets retain their references.
+        database.exerciseDao().update(original.copy(name = name.trim(), equipment = equipment.trim(),
             description = description.trim(), primaryMuscles = primaryMuscles.trim(),
             secondaryMuscles = secondaryMuscles.trim()))
     }

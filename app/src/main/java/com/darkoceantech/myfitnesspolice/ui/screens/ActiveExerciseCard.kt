@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darkoceantech.myfitnesspolice.data.*
@@ -25,41 +26,59 @@ import java.math.RoundingMode
 internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails, progress: WorkoutSessionState?,
     enabled: Boolean, onNote: (() -> Unit)? = null,
     onEquipment: (() -> Unit)? = null,
-    onComplete: (String) -> Unit = {}, onStart: (String) -> Unit = {}, onInfo: (String) -> Unit) {
+    onComplete: (String) -> Unit = {}, onStart: (String) -> Unit = {}, onInfo: (String) -> Unit,
+    historyCollapsed: Boolean = false, onToggleHistoryCollapse: (() -> Unit)? = null,
+    onChangeExercise: (() -> Unit)? = null) {
     val history = workout.workout.finishedAt != null
     val sets = entry.sets.sortedBy { it.position }.filter { !history || it.completedAt != null }
     val currentInCard = !history && sets.any { it.id == progress?.currentSetId }
     val next = workout.nextSet(null)
     var menu by remember { mutableStateOf(false) }
     var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
+    val options: @Composable () -> Unit = {
+        Box {
+            IconButton(onClick = { menu = true }, enabled = enabled,
+                modifier = Modifier.testTag("session-exercise-options-${entry.workoutExercise.id}")
+                    .semantics { contentDescription = "Session exercise options for ${entry.exercise.name}" }) { Text("⋮", fontSize = 24.sp) }
+            DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("View exercise info") }, enabled = enabled,
+                    onClick = { menu = false; showInfo = true })
+                if (onEquipment != null) DropdownMenuItem(text = { Text("Edit equipment setup") }, enabled = enabled,
+                    onClick = { menu = false; onEquipment() })
+                if (history && onChangeExercise != null) DropdownMenuItem(text = { Text("Change exercise selected") }, enabled = enabled,
+                    modifier = Modifier.testTag("change-history-exercise-${entry.workoutExercise.id}"),
+                    onClick = { menu = false; onChangeExercise() })
+            }
+        }
+    }
     Surface(Modifier.fillMaxWidth().testTag("active-card-${entry.workoutExercise.id}"), shape = PoliceCardShape,
         color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
         Column {
             Row(Modifier.fillMaxWidth().background(PoliceColors.Raised).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(if (currentInCard) "CURRENT" else "EXERCISE", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                Text(if (history && historyCollapsed) entry.exercise.name else if (currentInCard) "CURRENT" else "EXERCISE",
+                    style = if (history && historyCollapsed) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(if (history) "${sets.size} sets · ${sets.sumOf { (it.actualReps ?: it.reps).toLong() }} reps"
                     else "${sets.count { it.completedAt != null }} / ${sets.size} sets",
                     style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
+                if (history && onToggleHistoryCollapse != null) IconButton(onClick = onToggleHistoryCollapse, enabled = enabled,
+                    modifier = Modifier.testTag("history-card-toggle-${entry.workoutExercise.id}").semantics {
+                        contentDescription = if (historyCollapsed) "Expand ${entry.exercise.name}" else "Collapse ${entry.exercise.name}"
+                        stateDescription = if (historyCollapsed) "Collapsed" else "Expanded"
+                    }) { Text(if (historyCollapsed) "+" else "−", fontSize = 24.sp) }
+                if (history) options()
             }
             SirenRule(Modifier.fillMaxWidth())
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (!history || !historyCollapsed) Column(Modifier.padding(12.dp)
+                .testTag("exercise-card-content-${entry.workoutExercise.id}"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ShieldMark(Modifier.size(42.dp))
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                         Text(entry.exercise.name, style = MaterialTheme.typography.titleLarge)
                         Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
-                    Box {
-                        IconButton(onClick = { menu = true }, enabled = enabled,
-                            modifier = Modifier.semantics { contentDescription = "Session exercise options for ${entry.exercise.name}" }) { Text("⋮", fontSize = 24.sp) }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("View exercise info") }, enabled = enabled,
-                                onClick = { menu = false; showInfo = true })
-                            if (onEquipment != null) DropdownMenuItem(text = { Text("Edit equipment setup") }, enabled = enabled,
-                                onClick = { menu = false; onEquipment() })
-                        }
-                    }
+                    if (!history) options()
                 }
                 EquipmentPositionSummary(entry.workoutExercise.equipmentPositions)
                 if (onNote != null || entry.workoutExercise.notes.isNotBlank()) Text(
@@ -109,9 +128,13 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                                     containerColor = when { completed -> PoliceColors.Raised; isActive -> PoliceColors.Destructive; else -> Color.Transparent },
                                     contentColor = if (completed) PoliceColors.Muted else PoliceColors.Text,
                                     disabledContainerColor = PoliceColors.Raised, disabledContentColor = PoliceColors.Muted)) {
-                                if (completed) Box(Modifier.size(24.dp).border(1.5.dp, PoliceColors.Muted, androidx.compose.foundation.shape.CircleShape),
-                                    contentAlignment = Alignment.Center) { Text("i", fontSize = 16.sp) }
-                                else Text(if (isActive) "Active" else "Start", fontSize = 10.sp, maxLines = 1)
+                                if (completed) Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(24.dp).border(1.5.dp, PoliceColors.Muted, androidx.compose.foundation.shape.CircleShape),
+                                        contentAlignment = Alignment.Center) { Text("i", fontSize = 16.sp) }
+                                    if (set.notes.isNotBlank()) SetNoteMark(Modifier.size(18.dp).align(Alignment.TopEnd)
+                                        .testTag("set-note-indicator-${set.id}"))
+                                }
+                                else Text(if (isActive) "Done" else "Start", fontSize = 10.sp, maxLines = 1)
                             }
                         }
                     }
@@ -137,3 +160,19 @@ private fun SessionReadOnlyCell(value: String, description: String, muted: Boole
 
 internal fun sessionPounds(grams: Long): String = BigDecimal.valueOf(grams)
     .divide(BigDecimal("453.59237"), 2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+
+@Composable
+private fun SetNoteMark(modifier: Modifier = Modifier) {
+    Canvas(modifier.background(PoliceColors.Card, androidx.compose.foundation.shape.CircleShape)
+        .semantics { contentDescription = "Set note available" }.padding(2.dp)) {
+        val ink = PoliceColors.LightBlue
+        val stroke = 1.4.dp.toPx()
+        drawRoundRect(ink, topLeft = androidx.compose.ui.geometry.Offset(size.width * .1f, size.height * .12f),
+            size = androidx.compose.ui.geometry.Size(size.width * .68f, size.height * .78f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+        drawLine(ink, androidx.compose.ui.geometry.Offset(size.width * .3f, size.height * .72f),
+            androidx.compose.ui.geometry.Offset(size.width * .94f, size.height * .08f), stroke * 1.5f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    }
+}

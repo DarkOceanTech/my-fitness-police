@@ -55,7 +55,7 @@ class DispatchSessionUpdateTest {
             openSession()
             compose.onNodeWithText("Cancel workout").performScrollTo().assertIsDisplayed().performClick()
             compose.waitUntil(5000) { runBlocking { db.workoutDao().getDetails("w") == null } }
-            compose.onNodeWithText("Resume workout").assertDoesNotExist()
+            compose.onNodeWithTag("return-to-active-workout").assertDoesNotExist()
             runBlocking {
                 db.workoutDao().insert(Workout(id = "plan", kind = "plan", name = "Back strength"))
                 db.workoutExerciseDao().insert(WorkoutExercise(id = "pe", workoutId = "plan", exerciseId = "e", position = 0))
@@ -88,7 +88,9 @@ class DispatchSessionUpdateTest {
             compose.onNodeWithTag("set-action-s1").performClick()
             waitTag("actual-reps-input")
             val breakStart = runBlocking { db.sessionStateDao().get("w")!!.phaseStartedAt!! }
-            compose.onNodeWithTag("actual-reps-input").performTextReplacement("8")
+            compose.onNodeWithTag("actual-reps-input").performClick()
+            compose.onNodeWithTag("actual-reps-input-options").performScrollToNode(hasText("8"))
+            compose.onNode(hasText("8") and hasClickAction() and hasAnyAncestor(hasTestTag("actual-reps-input-options"))).performClick()
             Espresso.closeSoftKeyboard()
             compose.onNodeWithTag("after-set-rpe").performClick()
             compose.onNodeWithTag("Set RPE options").performScrollToNode(hasText("7"))
@@ -111,6 +113,8 @@ class DispatchSessionUpdateTest {
                     repo.sessionProgress.recordActual("w", id, 10)
                 }
             }
+            waitTag("workout-session-summary")
+            compose.onNodeWithTag("summary-review-sets").performScrollTo().performClick()
             compose.onNodeWithContentDescription("Info for set 1 of Cable row").performScrollTo().performClick()
             verifySwiping("active")
             compose.onNodeWithTag("active-set-times").performScrollTo().assertIsDisplayed()
@@ -147,8 +151,8 @@ class DispatchSessionUpdateTest {
     private fun openSession() {
         compose.onNode(hasText("Academy") and hasClickAction()).performClick()
         compose.onNodeWithTag("workout-section-0").performClick()
-        compose.waitUntil(5000) { compose.onAllNodesWithText("Resume workout").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Resume workout").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("return-to-active-workout").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("return-to-active-workout").performClick()
         waitTag("training-ready")
     }
     private suspend fun seed(db: FitnessDatabase) {

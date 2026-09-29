@@ -26,7 +26,7 @@ import java.math.BigDecimal
 internal fun RecordedSetInfoPanel(
     exerciseName: String, set: WorkoutSet, action: SessionAction, modifier: Modifier = Modifier,
     onEdit: () -> Unit,
-    onSave: (String?, String, String, Int?) -> Unit, onSaveNote: (String) -> Unit,
+    onSave: (String?, String, String, Int?, Boolean) -> Unit, onSaveNote: (String) -> Unit,
     totals: @Composable () -> Unit,
     tagPrefix: String = "history", correctionAction: String = "correct-history-set",
     noteAction: String = "save-history-set-note", restMillis: Long = set.restMillis,
@@ -40,6 +40,7 @@ internal fun RecordedSetInfoPanel(
     var planned by rememberSaveable(set.id) { mutableStateOf(set.reps.toString()) }
     var actual by rememberSaveable(set.id) { mutableStateOf(originalActual) }
     var rpe by rememberSaveable(set.id) { mutableStateOf(set.rpe) }
+    var warmup by rememberSaveable(set.id) { mutableStateOf(set.isWarmup) }
     var noteDialog by rememberSaveable(set.id) { mutableStateOf(false) }
     var note by rememberSaveable(set.id) { mutableStateOf(set.notes) }
     var revision by rememberSaveable(set.id) { mutableIntStateOf(action.revision) }
@@ -48,9 +49,9 @@ internal fun RecordedSetInfoPanel(
         onNavigationLocked(navigationLocked)
         onDispose { onNavigationLocked(false) }
     }
-    val dirty = editing && (weight != originalWeight || planned != set.reps.toString() || actual != originalActual || rpe != set.rpe)
+    val dirty = editing && (weight != originalWeight || planned != set.reps.toString() || actual != originalActual || rpe != set.rpe || warmup != set.isWarmup)
     fun resetDraft() {
-        weight = originalWeight; planned = set.reps.toString(); actual = originalActual; rpe = set.rpe
+        weight = originalWeight; planned = set.reps.toString(); actual = originalActual; rpe = set.rpe; warmup = set.isWarmup
     }
     LaunchedEffect(action.revision) {
         if (revision != action.revision) {
@@ -77,8 +78,10 @@ internal fun RecordedSetInfoPanel(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (set.isWarmup) "Warmup Set" else "Working Set", Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium, color = PoliceColors.Text)
+                        RecordedSetTypeHeading(if (editing) warmup else set.isWarmup, editing,
+                            !action.saving, "$tagPrefix-set-type", Modifier.weight(1f)) {
+                            warmup = it; onEdit()
+                        }
                         if (editing) TextButton(onClick = {
                             resetDraft(); editing = false; onEdit()
                         }, enabled = !action.saving, contentPadding = PaddingValues(horizontal = 8.dp),
@@ -86,7 +89,7 @@ internal fun RecordedSetInfoPanel(
                             Text("Cancel")
                         }
                         if (canEdit) PoliceButton(onClick = {
-                            if (dirty) onSave(weight.takeIf { it != originalWeight }, planned, actual, rpe)
+                            if (dirty) onSave(weight.takeIf { it != originalWeight }, planned, actual, rpe, warmup)
                             else {
                                 onEdit(); resetDraft(); editing = true
                             }
@@ -110,7 +113,8 @@ internal fun RecordedSetInfoPanel(
                         RecordedNumberField("Actual reps", if (editing) actual else originalActual, actualOptions,
                             editing, "$tagPrefix-set-actual", Modifier.weight(1f), enabled = !action.saving) { actual = it; onEdit() }
                     }
-                    if (set.modifier == "superset") Text("SUPERSET", color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
+                    if (set.modifier != "none") Text(if (set.modifier == "drop_set") "DROP SET" else "SUPERSET",
+                        color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
                 }
             }
             Surface(Modifier.fillMaxWidth().testTag("$tagPrefix-set-times"), shape = PoliceCardShape, color = PoliceColors.Card,
@@ -162,7 +166,39 @@ internal fun RecordedSetInfoPanel(
 }
 
 @Composable
-private fun RecordedNumberField(label: String, value: String, options: List<String>, editable: Boolean,
+private fun RecordedSetTypeHeading(
+    warmup: Boolean, editing: Boolean, enabled: Boolean, tag: String,
+    modifier: Modifier, onSelect: (Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Surface(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag)
+            .then(if (editing && enabled) Modifier.clickable(onClickLabel = "Change set type") { expanded = true } else Modifier)
+            .semantics { stateDescription = if (editing) "Editable" else "Read only" },
+            shape = RoundedCornerShape(10.dp),
+            color = if (editing) PoliceColors.Background else Color.Transparent,
+            border = if (editing) BorderStroke(1.dp, PoliceColors.LightBlue) else null) {
+            Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (warmup) "Warm-up Set" else "Working Set", Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium, color = PoliceColors.Text)
+                if (editing) Text("↕", color = PoliceColors.LightBlue)
+            }
+        }
+        DropdownMenu(expanded && editing && enabled, onDismissRequest = { expanded = false }) {
+            LazyColumn(Modifier.width(200.dp).height(112.dp).testTag("$tag-options")) {
+                items(listOf("Warm-up", "Working set")) { option ->
+                    DropdownMenuItem(text = { Text(option) }, onClick = {
+                        onSelect(option == "Warm-up"); expanded = false
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun RecordedNumberField(label: String, value: String, options: List<String>, editable: Boolean,
     tag: String, modifier: Modifier, enabled: Boolean = true, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {

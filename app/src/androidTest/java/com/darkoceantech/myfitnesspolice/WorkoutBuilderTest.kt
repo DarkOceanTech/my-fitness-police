@@ -29,12 +29,15 @@ class WorkoutBuilderTest {
             compose.onNodeWithText("Start My Workout").assertDoesNotExist()
             compose.onNodeWithText("Add Exercise").performScrollTo().performClick()
             compose.onNodeWithText("Test press").performClick()
+            val exerciseId = runBlocking { repo.observeExercises().first().single().id }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("remove-exercise-$exerciseId").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Back to workout").performClick()
             compose.onNodeWithText("Add Set").performScrollTo()
             compose.onNodeWithContentDescription("Modifier set 1").performClick()
             compose.onNodeWithText("Superset", substring = false).performClick()
             compose.waitForIdle()
             compose.onNodeWithContentDescription("Type set 1").performClick()
-            compose.onNodeWithText("Warmup", substring = false).performClick()
+            compose.onNodeWithText("Warm-up", substring = false).performClick()
             compose.waitForIdle()
             compose.onNodeWithText("Add a note prior to workout").performClick()
             compose.onNodeWithText("Exercise note").performTextInput("Keep elbows tucked")
@@ -85,7 +88,7 @@ class WorkoutBuilderTest {
             old.version = 1
         } finally { old.close() }
         val db = Room.databaseBuilder(context, FitnessDatabase::class.java, name)
-            .addMigrations(FitnessDatabase.MIGRATION_1_2, FitnessDatabase.MIGRATION_2_3, FitnessDatabase.MIGRATION_3_4, FitnessDatabase.MIGRATION_4_5, FitnessDatabase.MIGRATION_5_6, FitnessDatabase.MIGRATION_6_7, FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11).build()
+            .addMigrations(FitnessDatabase.MIGRATION_1_2, FitnessDatabase.MIGRATION_2_3, FitnessDatabase.MIGRATION_3_4, FitnessDatabase.MIGRATION_4_5, FitnessDatabase.MIGRATION_5_6, FitnessDatabase.MIGRATION_6_7, FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14).build()
         try {
             val entry = db.workoutDao().getDetails("w")!!.exercises.single()
             assertEquals("existing note", entry.workoutExercise.notes)

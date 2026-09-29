@@ -1,5 +1,6 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
@@ -26,6 +27,7 @@ import com.darkoceantech.myfitnesspolice.ui.theme.*
 import com.darkoceantech.myfitnesspolice.R
 import androidx.compose.ui.res.painterResource
 import com.darkoceantech.myfitnesspolice.data.Workout
+import com.darkoceantech.myfitnesspolice.data.WorkoutEditorRepository
 import com.darkoceantech.myfitnesspolice.data.displayName
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -36,13 +38,16 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
     val exerciseForm by exercisesModel.form.collectAsStateWithLifecycle()
+    val editingId = planId?.let { WorkoutEditorRepository.editId(it) }
+    LaunchedEffect(planId) { model.clearError() }
+    val original = state.sessions.firstOrNull { it.workout.id == planId && it.workout.kind == "plan" }
     val workout = state.sessions.firstOrNull {
-        if (planId == null) it.workout.kind == "draft" else it.workout.id == planId && it.workout.kind == "plan"
+        if (planId == null) it.workout.kind == "draft" else it.workout.id == editingId && it.workout.kind == "edit"
     }
     val entries = workout?.orderedExercises().orEmpty()
     val ids = entries.map { it.workoutExercise.id }
-    var draftName by rememberSaveable { mutableStateOf<String?>(null) }
-    val trainingIds = state.trainingPlans.filter { plan -> plan.members.any { it.workoutId == workout?.workout?.id } }.map { it.plan.id }
+    var draftName by rememberSaveable(planId) { mutableStateOf<String?>(null) }
+    val trainingIds = state.trainingPlans.filter { plan -> plan.members.any { it.workoutId == planId } }.map { it.plan.id }
     var collapsedIds by rememberSaveable(planId) { mutableStateOf(arrayListOf<String>()) }
     var initializedCollapse by rememberSaveable(planId) { mutableStateOf(planId == null) }
     LaunchedEffect(workout?.workout?.id) {
@@ -53,11 +58,10 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     }
     var saved by remember { mutableStateOf(false) }
     val contentSnapshot = remember(workout) { workout?.editSnapshot() }
-    var savedSnapshot by rememberSaveable(planId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(contentSnapshot) {
-        if (planId != null && savedSnapshot == null) savedSnapshot = contentSnapshot
-    }
-    val hasChanges = planId == null || (savedSnapshot != null && contentSnapshot != savedSnapshot)
+    val savedSnapshot = remember(original) { original?.editSnapshot() }
+    val hasChanges = if (planId == null) !draftName.isNullOrBlank() || workout?.let {
+        it.exercises.isNotEmpty() || it.workout.name.isNotBlank() || it.workout.targetMuscles.isNotBlank()
+    } == true else savedSnapshot != null && contentSnapshot != null && contentSnapshot != savedSnapshot
     LaunchedEffect(saved) {
         if (saved) { delay(6000); saved = false }
     }
@@ -70,7 +74,31 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     var clearing by rememberSaveable { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
     var metadata by rememberSaveable { mutableStateOf(false) }
+    var leaving by rememberSaveable(planId) { mutableStateOf(false) }
+    var exitAfterSave by rememberSaveable(planId) { mutableStateOf(false) }
+    var discarding by rememberSaveable(planId) { mutableStateOf(false) }
     var revision by rememberSaveable { mutableIntStateOf(action.revision) }
+    LaunchedEffect(planId, workout?.workout?.id, action.saving, action.error) {
+        if (planId != null && workout == null && !action.saving && action.error == null && !discarding && !deleting) {
+            model.beginPlanEdit(planId)
+        }
+    }
+
+    fun discardAndExit() {
+        model.clearError()
+        if (planId != null) {
+            discarding = true
+            model.discardPlanEdit(planId)
+        } else if (workout != null) {
+            discarding = true
+            model.clearDraft()
+        } else onBack()
+    }
+    fun requestBack() {
+        if (action.saving) return
+        if (hasChanges) { model.clearError(); leaving = true } else discardAndExit()
+    }
+    BackHandler { requestBack() }
 
     val list = rememberLazyListState()
     var draggedId by remember { mutableStateOf<String?>(null) }
@@ -103,17 +131,23 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     LaunchedEffect(action.revision) {
         if (revision != action.revision) {
             if (finishing && action.completedAction == "save-plan") {
-                if (planId == null) onSaved() else {
-                    savedSnapshot = contentSnapshot
-                    saved = true
-                }
+                if (exitAfterSave) {
+                    exitAfterSave = false
+                    leaving = false
+                    if (planId == null) onSaved() else discardAndExit()
+                } else if (planId == null) onSaved() else saved = true
             } else saved = false
+            if (discarding && (action.completedAction == "discard-plan-edit" ||
+                    (planId == null && action.completedAction == "clear-draft"))) {
+                discarding = false
+                leaving = false
+                onBack()
+            }
             if (deleting && action.completedAction == "delete-plan") { deleting = false; onDeleted() }
             if (action.completedAction == "save-metadata") metadata = false
             if (action.completedAction == "save-equipment-positions") equipmentEntry = null
             if (clearing) draftName = null
             clearing = false
-            picker = false
             noteEntry = null
             finishing = false
             revision = action.revision
@@ -121,7 +155,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     }
     Column(modifier.fillMaxSize()) {
         SectionPageHeader(if (planId == null) "Create your Workout" else "Edit workout",
-            onBack = onBack, backLabel = "Back to workout home", enabled = !action.saving) {
+            onBack = ::requestBack, backLabel = "Back to workout home", enabled = !action.saving) {
             if (planId != null) Box {
                 IconButton(onClick = { options = true }, enabled = workout != null && !action.saving,
                     modifier = Modifier.semantics { contentDescription = "Workout options" }) { Text("⋮", fontSize = 26.sp) }
@@ -138,7 +172,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         if (saved) WorkoutSavedNotice(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { saved = false }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("workout-builder"), state = list,
             contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            if (state.loading) item { CircularProgressIndicator() }
+            if (state.loading || (planId != null && workout == null && action.error == null)) item { CircularProgressIndicator() }
             else if (state.failed) item {
                 Text("Could not load your workout.")
                 TextButton(onClick = model::retry) { Text("Retry") }
@@ -146,7 +180,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                 item(key = "metadata") {
                     if (planId == null) WorkoutDetailsFields((workout?.workout ?: Workout(kind = "draft"))
                         .copy(name = draftName ?: workout?.workout?.name.orEmpty()), !action.saving) { field, value ->
-                        if (field == "name") draftName = value else model.setDetails(field, value, planId)
+                        if (field == "name") draftName = value else model.setDetails(field, value, workout?.workout?.id)
                     } else workout?.workout?.let { MetadataSummary(it) }
                 }
                 if (entries.isNotEmpty()) item(key = "exercise-list-controls") {
@@ -189,12 +223,13 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                         onCopyLast = { model.copyLastSet(workout.workout.id, id) },
                         onEquipment = { model.clearError(); equipmentEntry = id },
                         onRemove = { model.removeExercise(workout.workout.id, id) },
+                        onDeleteSet = { model.deleteSet(workout.workout.id, id, it) },
                         onNote = { model.clearError(); note = entry.workoutExercise.notes; noteEntry = id },
                         onChange = { set, field, value -> model.changeSet(workout.workout.id, id, set, field, value) })
                 }
                 item(key = "actions") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PoliceOutlinedButton(onClick = { model.clearError(); picker = true }, enabled = !action.saving,
+                        PoliceOutlinedButton(onClick = { model.clearError(); picker = true }, enabled = !action.saving && (planId == null || workout != null),
                             modifier = Modifier.weight(1f).testTag("add-workout-exercise")) { Text("Add Exercise") }
                         PoliceButton(onClick = { model.clearError(); finishing = true },
                             enabled = !action.saving && hasChanges && entries.any { it.sets.isNotEmpty() },
@@ -206,8 +241,11 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                         enabled = !action.saving && (workout != null || !draftName.isNullOrEmpty())) { Text("Clear") }
                 }
             }
-            if (action.error != null && !picker && noteEntry == null && !finishing && !metadata && !clearing && !deleting && equipmentEntry == null) item {
+            if (action.error != null && !picker && noteEntry == null && !finishing && !metadata && !clearing && !deleting && !leaving && equipmentEntry == null) item {
                 Text(action.error!!, color = MaterialTheme.colorScheme.error)
+                if (planId != null && workout == null) TextButton(onClick = { model.beginPlanEdit(planId) }, enabled = !action.saving) {
+                    Text("Retry")
+                }
             }
         }
     }
@@ -215,7 +253,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         onDismissRequest = { if (!action.saving) deleting = false }, title = { Text("Delete this workout?") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("This permanently deletes the saved workout and its exercises and sets, and removes it from any training plans. This cannot be undone.")
-            Text("Completed workout history and any workout already in progress will remain available.")
+            Text("Your Workout Log and any workout already in progress will remain available.")
             action.error?.let { Text(it, color = PoliceColors.Error) }
         } },
         confirmButton = { TextButton(onClick = { model.deletePlan(planId) }, enabled = !action.saving,
@@ -227,7 +265,12 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         onSave = { name, muscles -> model.saveMetadata(workout.workout.id, name, muscles, workout.workout.dayOfWeek, trainingIds) })
     if (picker) ExercisePickerDialog(state.exercises, action.saving, action.error,
         form = exerciseForm, onResetForm = exercisesModel::resetForm, onAddExercise = exercisesModel::addExercise,
-        onDismiss = { picker = false }, onSelect = { model.chooseExercise(it, planId) })
+        onDismiss = { picker = false; model.clearError() }, onSelect = { model.chooseExercise(it, workout?.workout?.id) },
+        selectedExerciseIds = entries.map { it.exercise.id }.toSet(),
+        onRemove = { exerciseId ->
+            val entry = entries.firstOrNull { it.exercise.id == exerciseId }
+            if (workout != null && entry != null) model.removeExercise(workout.workout.id, entry.workoutExercise.id)
+        })
     if (equipmentEntry != null && workout != null) {
         entries.firstOrNull { it.workoutExercise.id == equipmentEntry }?.let { entry ->
             EquipmentPositionEditor(entry, action,
@@ -246,7 +289,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
             enabled = !action.saving) { Text("Save note") } },
         dismissButton = { TextButton(onClick = { noteEntry = null }, enabled = !action.saving) { Text("Cancel") } },
     )
-    if (finishing && workout != null) AlertDialog(
+    if (finishing && !leaving && workout != null) AlertDialog(
         onDismissRequest = { if (!action.saving) finishing = false }, title = { Text("Save workout?") },
         text = { Text(action.error ?: if (planId == null) "Save this workout to your Workouts list?" else "Save changes to this workout?") },
         confirmButton = { TextButton(onClick = { model.savePlan(workout.workout.id, if (planId == null) draftName else null) },
@@ -258,6 +301,32 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         text = { Text(action.error ?: "Remove this draft's exercises, sets, notes, and selections? Saved workouts will remain.") },
         confirmButton = { TextButton(onClick = model::clearDraft, enabled = !action.saving) { Text("Clear draft") } },
         dismissButton = { TextButton(onClick = { clearing = false }, enabled = !action.saving) { Text("Cancel") } },
+    )
+    if (leaving) AlertDialog(
+        onDismissRequest = { if (!action.saving) { leaving = false; exitAfterSave = false; finishing = false } },
+        title = { Text("Save your changes?") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Save this workout before leaving, discard your changes, or continue editing.")
+            if (entries.none { it.sets.isNotEmpty() }) Text("Add at least one set before saving.", color = PoliceColors.Muted)
+            action.error?.let { Text(it, color = PoliceColors.Error) }
+        } },
+        confirmButton = { Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PoliceButton(onClick = {
+                val current = workout ?: return@PoliceButton
+                finishing = true
+                exitAfterSave = true
+                model.savePlan(current.workout.id, if (planId == null) draftName else null)
+            }, enabled = !action.saving && entries.any { it.sets.isNotEmpty() },
+                modifier = Modifier.fillMaxWidth().testTag("save-workout-and-exit")) { Text("Save changes") }
+            TextButton(onClick = ::discardAndExit, enabled = !action.saving,
+                modifier = Modifier.fillMaxWidth().testTag("discard-workout-changes")) {
+                Text("Exit without saving", color = PoliceColors.Error)
+            }
+            TextButton(onClick = { leaving = false; exitAfterSave = false; finishing = false; model.clearError() },
+                enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("continue-editing-workout")) {
+                Text("Continue editing")
+            }
+        } },
     )
 }
 

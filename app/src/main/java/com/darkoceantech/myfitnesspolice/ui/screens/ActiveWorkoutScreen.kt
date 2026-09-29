@@ -42,7 +42,11 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
     onBack: () -> Unit, onFinished: (String) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
-    val workout = state.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
+    var displayedSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val ongoing = state.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
+    val workout = state.sessions.firstOrNull { it.workout.id == displayedSessionId } ?: ongoing
+    LaunchedEffect(workout?.workout?.id) { if (workout != null) displayedSessionId = workout.workout.id }
+    var reviewingSummarySets by rememberSaveable { mutableStateOf(false) }
     val progress = workout?.sessionState
     var finishDialog by rememberSaveable { mutableStateOf(false) }
     var pauseDialog by rememberSaveable { mutableStateOf(false) }
@@ -56,7 +60,12 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
         model.deferAutoFinish(editingSetDetails || noteId != null || equipmentId != null || finishDialog)
         onDispose { model.deferAutoFinish(false) }
     }
-    fun back() { if (infoId != null) infoId = null else onBack() }
+    fun back() {
+        when { workout?.workout?.finishedAt != null -> onBack()
+            infoId != null -> infoId = null
+            reviewingSummarySets -> reviewingSummarySets = false
+            else -> onBack() }
+    }
     BackHandler { if (!action.saving) back() }
     LaunchedEffect(workout?.workout?.id) {
         if (workout != null && progress == null) model.ensureSession(workout.workout.id)
@@ -102,6 +111,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
         val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         val sessionNotices: @Composable () -> Unit = {
             if (progress.phase == "cooldown") {
+                TextButton(onClick = { infoId = null; reviewingSummarySets = false },
+                    modifier = Modifier.testTag("return-to-summary")) { Text("Return to workout summary") }
                 Surface(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("cooldown-banner"),
                     shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Blue)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
@@ -144,7 +155,14 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                     enabled = !action.saving && progress.hasStarted, modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag("finish-workout")) { Text("Finish workout") }
             }
         }
-        Column(modifier.fillMaxSize()) {
+        val showSummary = workout.workout.finishedAt != null ||
+            (progress.phase == "cooldown" && !progress.awaitingActual && !reviewingSummarySets)
+        if (showSummary) WorkoutSessionSummaryScreen(workout, now, action, modifier,
+            onBack = onBack, onReviewSets = { reviewingSummarySets = true },
+            onPauseResume = {
+                if (progress.isPaused) model.resumeSession(workout.workout.id) else model.pauseSession(workout.workout.id)
+            }, onHistory = { onFinished(workout.workout.id) })
+        else Column(modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxWidth().testTag("active-workout-header")) {
                 val timerWidth = (maxWidth * .45f).coerceAtMost(280.dp)
                 Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp),
@@ -175,7 +193,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                         activeMillis = detailSet.activeMillis + if (progress.phase == "active" && progress.currentSetId == detailSet.id) progress.phaseMillis(now) else 0,
                         restMillis = detailSet.restMillis + if (progress.phase in listOf("rest", "cooldown") && progress.currentSetId == detailSet.id) progress.phaseMillis(now) else 0,
                         onNavigationLocked = lock, onEdit = model::clearError,
-                        onSave = { pounds, planned, actual, rpe -> model.correctActiveSet(workout.workout.id, detailSet.id, pounds, planned, actual, rpe) },
+                        onSave = { pounds, planned, actual, rpe, warmup -> model.correctActiveSet(workout.workout.id, detailSet.id, pounds, planned, actual, rpe, warmup) },
                         onSaveNote = { model.saveActiveSetNote(workout.workout.id, detailSet.id, it) },
                         totals = {
                             sessionNotices()
@@ -196,7 +214,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                 // Neighboring pages must not expose duplicate pause/finish controls to accessibility.
                 Box(Modifier.fillMaxSize().then(if (index == pager.currentPage) Modifier else Modifier.clearAndSetSemantics { })) {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                        .testTag("active-exercise-scroll-${entry.workoutExercise.id}").padding(horizontal = 16.dp, vertical = 12.dp),
+                        .testTag("active-exercise-scroll-${entry.workoutExercise.id}")
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (landscape) 76.dp else 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         sessionNotices()
                         ActiveExerciseCard(entry, workout, progress, !action.saving,
@@ -234,7 +253,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
             title = { Text("Finish this workout?") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("You can pause your workout if you need to come back to it later.")
-                Text("Finish now to save the sets you performed to History. Uncompleted sets will remain unperformed.")
+                Text("Finish now to save the sets you performed to your Workout Log. Uncompleted sets will remain unperformed.")
                 action.error?.let { Text(it, color = PoliceColors.Error) }
             } },
             confirmButton = { TextButton(onClick = { pendingFinishId = workout.workout.id; model.finishSession(workout.workout.id) }, enabled = !action.saving) { Text("Finish") } },

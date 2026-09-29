@@ -54,7 +54,7 @@ class ActiveCooldownTest {
         } finally { db.close() }
     }
 
-    @Test fun expiredCooldownWaitsForFinalResultsThenAutomaticallyOpensHistory() {
+    @Test fun expiredCooldownWaitsForFinalResultsThenShowsSummaryAndHistory() {
         val db = database()
         val repo = FitnessRepository(db)
         runBlocking { seed(db, 1); repo.sessionProgress.prepareSession("w") }
@@ -65,7 +65,9 @@ class ActiveCooldownTest {
             compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
             compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
             waitTag("after-set-cooldown")
-            compose.onNodeWithTag("actual-reps-input").performTextReplacement("8")
+            compose.onNodeWithTag("actual-reps-input").performClick()
+            compose.onNodeWithTag("actual-reps-input-options").performScrollToNode(hasText("8"))
+            compose.onNode(hasText("8") and hasClickAction() and hasAnyAncestor(hasTestTag("actual-reps-input-options"))).performClick()
             Espresso.closeSoftKeyboard()
             screenshot("final-results-cooldown")
             // Advance the persisted anchor instead of sleeping for a minute in a UI test.
@@ -77,11 +79,14 @@ class ActiveCooldownTest {
                 start + COOL_DOWN_MILLIS
             }
             compose.waitUntil(5000) {
-                compose.onAllNodesWithText("Cool-down complete. Save reps to finish.").fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithText("Cool-down complete. Save reps to see your summary.").fetchSemanticsNodes().isNotEmpty()
             }
             assertNull(runBlocking { db.workoutDao().getDetails("w")!!.workout.finishedAt })
-            compose.onNodeWithTag("actual-reps-input").assertTextContains("8")
+            compose.onNodeWithTag("actual-reps-input").assert(hasText("8"))
             compose.onNodeWithText("Save reps").performClick()
+            waitTag("workout-session-summary")
+            compose.waitUntil(8000) { runBlocking { db.workoutDao().getDetails("w")!!.workout.finishedAt != null } }
+            compose.onNodeWithTag("summary-view-history").performScrollTo().performClick()
             waitTag("history-detail")
             compose.onNode(hasText("Reports") and hasClickAction()).assertIsSelected()
             runBlocking {
@@ -102,15 +107,20 @@ class ActiveCooldownTest {
             compose.setContent { MyFitnessPoliceApp(repo) }
             openSession()
             startAndComplete("s1", db)
-            waitTag("cooldown-banner")
+            waitTag("workout-session-summary")
             screenshot("cooldown-countdown")
+            compose.onNodeWithTag("summary-review-sets").performScrollTo().performClick()
             compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
             compose.onNodeWithTag("edit-active-set").performScrollTo().performClick()
+            compose.onNodeWithTag("cancel-active-set").assertIsDisplayed()
+            compose.waitForIdle()
             runBlocking {
                 val state = db.sessionStateDao().get("w")!!
                 val start = System.currentTimeMillis() - 61_000
                 db.sessionStateDao().save(state.copy(phaseStartedAt = start, dutyStartedAt = start - 1000))
             }
+            compose.waitForIdle()
+            screenshot("cooldown-edit-before-check")
             compose.onNodeWithTag("cooldown-remaining").performScrollTo()
             compose.waitUntil(5000) {
                 compose.onAllNodes(hasTestTag("cooldown-remaining") and hasText("0:00")).fetchSemanticsNodes().isNotEmpty()
@@ -143,8 +153,8 @@ class ActiveCooldownTest {
     private fun openSession() {
         compose.onNode(hasText("Academy") and hasClickAction()).performClick()
         compose.onNodeWithTag("workout-section-0").performClick()
-        compose.waitUntil(5000) { compose.onAllNodesWithText("Resume workout").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Resume workout").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("return-to-active-workout").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("return-to-active-workout").performClick()
         waitTag("training-ready")
     }
     private suspend fun seed(db: FitnessDatabase, count: Int, secondExercise: Boolean = false) {

@@ -149,6 +149,8 @@ class ExerciseScreenTest {
             val id = "e12d7b3e-588b-4fc2-8d3f-000000000008"
             compose.onNodeWithTag("exercise-picker-list").performScrollToNode(hasTestTag("select-exercise-$id"))
             compose.onNodeWithTag("select-exercise-$id").performClick()
+            compose.waitUntil(8000) { compose.onAllNodesWithTag("remove-exercise-$id").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Back to workout").performClick()
             compose.waitUntil(8000) { compose.onAllNodesWithTag("exercise-picker-search").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("workout-builder").performScrollToNode(hasText("Seated independent-arm machine row"))
             compose.onNodeWithText("Seated independent-arm machine row").assertIsDisplayed()

@@ -2,14 +2,12 @@ package com.darkoceantech.myfitnesspolice.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.darkoceantech.myfitnesspolice.data.WorkoutSet
 import com.darkoceantech.myfitnesspolice.ui.theme.PoliceColors
@@ -25,18 +23,21 @@ internal fun ActualRepsDialog(set: WorkoutSet, action: SessionAction, onSave: (S
     if (!visible) return // Retain the unsaved form while the pause dialog is visible.
     AlertDialog(onDismissRequest = {}, title = { Text("Actual reps performed") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (cooldownRemaining != null) "Your one-minute cool-down has started. Save your results to finish automatically when it ends."
+            Text(if (cooldownRemaining != null) "Your one-minute cool-down has started. Save your results to see your workout summary while the timer continues."
                 else "Your break timer is running. How many reps did you complete?")
             Text("Break · ${sessionTime(breakMillis)}", color = PoliceColors.LightBlue,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("after-set-break-time"))
-            if (cooldownRemaining != null) Text(if (cooldownRemaining == 0L) "Cool-down complete. Save reps to finish."
+            if (cooldownRemaining != null) Text(if (cooldownRemaining == 0L) "Cool-down complete. Save reps to see your summary."
                 else "Cool-down · ${sessionTime(((cooldownRemaining + 999) / 1000) * 1000)} remaining",
                 style = MaterialTheme.typography.bodyMedium, color = PoliceColors.LightBlue,
                 modifier = Modifier.testTag("after-set-cooldown"))
-            OutlinedTextField(actual, { actual = it }, label = { Text("Actual reps") }, enabled = !action.saving,
-                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth().testTag("actual-reps-input"))
-            Text("Enter 0 if you could not complete a rep.", style = MaterialTheme.typography.bodySmall)
+            val repOptions = remember(set.id, set.reps, set.actualReps) {
+                ((0..500).map { it.toString() } + set.reps.toString() + listOfNotNull(set.actualReps?.toString()))
+                    .distinct().sortedBy { it.toInt() }
+            }
+            RecordedNumberField("Actual reps", actual, repOptions, true, "actual-reps-input", Modifier.fillMaxWidth(),
+                enabled = !action.saving) { actual = it }
+            Text("Choose 0 if you could not complete a rep.", style = MaterialTheme.typography.bodySmall)
             Text("RPE (optional)", style = MaterialTheme.typography.labelLarge, color = PoliceColors.Muted)
             TablePicker("Set RPE", rpe?.toString() ?: "Not set", listOf("Not set") + (1..10).map { it.toString() },
                 !action.saving, Modifier.fillMaxWidth().testTag("after-set-rpe")) { rpe = it.toIntOrNull() }

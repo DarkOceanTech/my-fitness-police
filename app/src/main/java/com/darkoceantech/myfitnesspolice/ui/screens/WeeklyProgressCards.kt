@@ -38,7 +38,7 @@ import kotlin.math.pow
 
 internal enum class ProgressMetric(val label: String, val totalLabel: String, val info: String) {
     Sets("Sets", "Sets Completed",
-        "Recorded sets in workouts started this week, Monday–Sunday. Includes warmup and working sets."),
+        "Recorded sets in workouts started this week, Monday–Sunday. Includes Warm-up and working sets."),
     Reps("Reps", "Reps Performed",
         "Actual repetitions recorded in workouts started this week. Planned and unfinished sets are excluded."),
     Weight("Weight", "Lbs Lifted",

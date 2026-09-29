@@ -8,11 +8,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
-        TrainingPlan::class, TrainingPlanWorkout::class],
-    version = 11,
+        TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class],
+    version = 14,
     exportSchema = true,
 )
-@androidx.room.TypeConverters(EquipmentPositionConverters::class)
+@androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class)
 abstract class FitnessDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun workoutDao(): WorkoutDao
@@ -22,6 +22,34 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingPlanDao(): TrainingPlanDao
 
     companion object {
+        val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS training_plan_exercises (
+                    trainingPlanId TEXT NOT NULL, exerciseId TEXT NOT NULL, position INTEGER NOT NULL,
+                    sets TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(trainingPlanId, exerciseId),
+                    FOREIGN KEY(trainingPlanId) REFERENCES training_plans(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(exerciseId) REFERENCES exercises(id) ON UPDATE NO ACTION ON DELETE RESTRICT)""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_training_plan_exercises_exerciseId ON training_plan_exercises(exerciseId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_training_plan_exercises_trainingPlanId_position ON training_plan_exercises(trainingPlanId, position)")
+                // Existing workout memberships and all recorded history remain untouched.
+            }
+        }
+
+        val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // A shared plan does not identify a selection batch. Never merge old sessions by inference.
+                db.execSQL("ALTER TABLE workouts ADD COLUMN historyGroupId TEXT DEFAULT NULL")
+            }
+        }
+
+        val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workout_exercises ADD COLUMN sourceWorkoutId TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_exercises ADD COLUMN sourceWorkoutName TEXT NOT NULL DEFAULT ''")
+                // Older grouped sessions did not record source membership. Leave it unknown.
+            }
+        }
+
         val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE training_plans ADD COLUMN dayOfWeek TEXT NOT NULL DEFAULT ''")
@@ -164,7 +192,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }

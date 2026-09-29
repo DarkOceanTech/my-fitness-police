@@ -26,7 +26,7 @@ fun WorkoutScreen(state: ListState<Workout>, onRetry: () -> Unit, modifier: Modi
 
 @Composable
 fun HistoryScreen(state: ListState<Workout>, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    WorkoutList("History", state, "No completed workouts yet",
+    WorkoutList("Workout Log", state, "No completed workouts yet",
         "Your completed sessions will appear here.", onRetry, modifier)
 }
 

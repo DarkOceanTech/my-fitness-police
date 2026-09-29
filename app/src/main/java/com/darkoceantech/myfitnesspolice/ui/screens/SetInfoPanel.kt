@@ -8,7 +8,7 @@ import com.darkoceantech.myfitnesspolice.data.WorkoutSet
 @Composable
 internal fun SetInfoPanel(exerciseName: String, set: WorkoutSet, action: SessionAction,
     modifier: Modifier = Modifier, restMillis: Long = set.restMillis,
-    onEdit: () -> Unit, onSave: (String?, String, String, Int?) -> Unit,
+    onEdit: () -> Unit, onSave: (String?, String, String, Int?, Boolean) -> Unit,
     onSaveNote: (String) -> Unit, totals: @Composable () -> Unit) {
     RecordedSetInfoPanel(exerciseName, set, action, modifier, onEdit, onSave, onSaveNote, totals,
         tagPrefix = "active", correctionAction = "correct-active-set", noteAction = "save-active-set-note",

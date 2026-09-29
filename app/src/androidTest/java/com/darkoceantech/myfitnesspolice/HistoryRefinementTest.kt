@@ -63,18 +63,18 @@ class HistoryRefinementTest {
             compose.onNodeWithTag("progress-history-tile").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("history-workout-$firstId").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("history-workout-$firstId").performClick()
-            compose.onNodeWithContentDescription("History options").performClick()
+            compose.onNodeWithContentDescription("Workout Log options").performClick()
             compose.onNodeWithText("Delete all", substring = false).assertDoesNotExist()
             androidx.test.espresso.Espresso.pressBack()
-            compose.onNodeWithContentDescription("Back to history").performClick()
-            compose.onNodeWithContentDescription("History options").performClick()
+            compose.onNodeWithContentDescription("Back to Workout Log").performClick()
+            compose.onNodeWithContentDescription("Workout Log options").performClick()
             compose.onNodeWithText("Delete all", substring = false).performClick()
-            compose.onNodeWithText("Delete all workout history?").assertIsDisplayed()
+            compose.onNodeWithText("Delete all Workout Log entries?").assertIsDisplayed()
             compose.onNodeWithText("This permanently deletes all 2 logged workouts, including their sets, notes, and timing. This cannot be undone.")
                 .assertIsDisplayed()
             compose.onNodeWithText("Cancel").performClick()
             runBlocking { assertEquals(2, repo.observeHistory().first().size) }
-            compose.onNodeWithContentDescription("History options").performClick()
+            compose.onNodeWithContentDescription("Workout Log options").performClick()
             compose.onNodeWithText("Delete all", substring = false).performClick()
             compose.onNodeWithTag("confirm-delete-history").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("No completed workouts yet").fetchSemanticsNodes().isNotEmpty() }

@@ -1,5 +1,6 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -17,10 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.darkoceantech.myfitnesspolice.data.Exercise
@@ -37,14 +41,17 @@ fun ExercisesScreen(
     onResetForm: () -> Unit, modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null, openAddOnEntry: Boolean = false,
     header: (@Composable () -> Unit)? = null,
+    onUpdate: (String, String, String, String, String, String) -> Unit,
 ) {
     var showForm by rememberSaveable { mutableStateOf(openAddOnEntry) }
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editingExercise = (state as? ListState.Ready<Exercise>)?.items?.firstOrNull { it.id == editingId }
     BackHandler(onBack != null && !showForm) { if (!form.saving) onBack?.invoke() }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedNames by rememberSaveable { mutableStateOf(MuscleGroup.entries.map { it.name }) }
     val selected = selectedMuscleGroups(selectedNames)
     LaunchedEffect(form.saved) {
-        if (form.saved) { showForm = false; query = ""; selectedNames = MuscleGroup.entries.map { it.name }; onResetForm() }
+        if (form.saved) { showForm = false; editingId = null; query = ""; selectedNames = MuscleGroup.entries.map { it.name }; onResetForm() }
     }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (header != null) header()
@@ -56,7 +63,7 @@ fun ExercisesScreen(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ExerciseSearch(query, { query = it }, "catalog-search", Modifier.weight(1f))
-                    PoliceIconButton(onClick = { onResetForm(); showForm = true }, enabled = !form.saving,
+                    PoliceIconButton(onClick = { onResetForm(); editingId = null; showForm = true }, enabled = !form.saving,
                         modifier = Modifier.size(48.dp).testTag("add-catalog-exercise"), shape = RoundedCornerShape(12.dp)) {
                         Icon(painterResource(R.drawable.ic_add), contentDescription = "Add exercise")
                     }
@@ -85,12 +92,22 @@ fun ExercisesScreen(
                             else -> "No matches. Try another group, name, equipment, or muscle."
                         }, color = PoliceColors.Muted)
                     }
-                    items(matches, key = { it.id }) { exercise -> ExerciseCatalogCard(exercise) }
+                    items(matches, key = { it.id }) { exercise ->
+                        ExerciseCatalogCard(exercise, enabled = !form.saving, onEdit = {
+                            onResetForm(); editingId = exercise.id; showForm = true
+                        })
+                    }
                 }
             }
         }
     }
-    if (showForm) AddExerciseDialog(form, onDismiss = { showForm = false }, onEdit = onResetForm, onAdd = onAdd)
+    if (showForm && (editingId == null || editingExercise != null)) ExerciseFormDialog(form,
+        exercise = editingExercise,
+        onDismiss = { showForm = false; editingId = null; onResetForm() }, onEdit = onResetForm,
+        onSave = { name, equipment, description, primary, secondary ->
+            if (editingId == null) onAdd(name, equipment, description, primary, secondary)
+            else onUpdate(requireNotNull(editingId), name, equipment, description, primary, secondary)
+        })
 }
 
 private fun selectedMuscleGroups(names: List<String>): Set<MuscleGroup> = names.flatMap { name ->
@@ -120,16 +137,30 @@ private fun ExerciseSearch(query: String, onChange: (String) -> Unit, tag: Strin
 }
 
 @Composable
-private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onSelect: (() -> Unit)? = null) {
+private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onSelect: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null, selected: Boolean = false, selectLabel: String = "Add") {
     var expanded by rememberSaveable(exercise.id) { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxWidth().testTag("catalog-exercise-${exercise.id}"), shape = PoliceCardShape,
-        color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
+        color = PoliceColors.Card, border = BorderStroke(1.dp, if (selected) PoliceColors.Red else PoliceColors.Border)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(modifier = if (onSelect == null) Modifier else Modifier.clickable(enabled = enabled, onClick = onSelect),
+            Row(modifier = if (onSelect == null || selected) Modifier else Modifier.clickable(enabled = enabled, onClick = onSelect),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ShieldMark(Modifier.size(32.dp))
                 Text(exercise.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                SirenRule(Modifier.width(24.dp))
+                if (onEdit != null) Box {
+                    IconButton(onClick = { menu = true }, enabled = enabled,
+                        modifier = Modifier.testTag("exercise-options-${exercise.id}")) {
+                        Text("⋮", fontSize = 26.sp, modifier = Modifier.semantics {
+                            contentDescription = "Exercise options for ${exercise.name}"
+                        })
+                    }
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("Edit exercise details") },
+                            onClick = { menu = false; onEdit() }, enabled = enabled,
+                            modifier = Modifier.testTag("edit-exercise-${exercise.id}"))
+                    }
+                } else SirenRule(Modifier.width(24.dp))
             }
             Text(exercise.mainMuscleGroup().label.uppercase(java.util.Locale.ROOT),
                 color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
@@ -145,8 +176,14 @@ private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onS
                     Text(if (expanded) "Hide details" else "Show details")
                 }
                 Spacer(Modifier.weight(1f))
-                if (onSelect != null) PoliceButton(onClick = onSelect, enabled = enabled,
-                    modifier = Modifier.testTag("select-exercise-${exercise.id}")) { Text("Add") }
+                if (onSelect != null) {
+                    if (selected) Button(onClick = onSelect, enabled = enabled,
+                        colors = ButtonDefaults.buttonColors(containerColor = PoliceColors.Red.copy(alpha = .18f), contentColor = PoliceColors.Error),
+                        border = BorderStroke(1.dp, PoliceColors.Red),
+                        modifier = Modifier.testTag("remove-exercise-${exercise.id}")) { Text("Remove") }
+                    else PoliceButton(onClick = onSelect, enabled = enabled,
+                        modifier = Modifier.testTag("select-exercise-${exercise.id}")) { Text(selectLabel) }
+                }
             }
         }
     }
@@ -162,55 +199,82 @@ private fun ExerciseDetailField(label: String, value: String) {
 
 @Composable
 private fun ExerciseDialogFrame(
-    title: String, enabled: Boolean, onDismiss: () -> Unit, fullScreen: Boolean = false,
-    footer: @Composable RowScope.() -> Unit, content: @Composable ColumnScope.() -> Unit,
+    title: String, enabled: Boolean, onDismiss: () -> Unit,
+    screenTag: String = "exercise-picker-screen", backLabel: String = "Back to workout",
+    footer: (@Composable RowScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit,
 ) {
+    val currentContent by rememberUpdatedState(content)
+    val formBody = remember {
+        movableContentOf {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) { currentContent() }
+        }
+    }
     Dialog(onDismissRequest = { if (enabled) onDismiss() }, properties = DialogProperties(
-        usePlatformDefaultWidth = false, decorFitsSystemWindows = !fullScreen)) {
-        val frame = if (fullScreen) Modifier.fillMaxSize().testTag("exercise-picker-screen")
+        usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        val frame = Modifier.fillMaxSize().testTag(screenTag)
             .policeBackdrop().safeDrawingPadding().imePadding()
-        else Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(16.dp).imePadding().heightIn(max = 680.dp)
-        Surface(frame, shape = if (fullScreen) RectangleShape else PoliceCardShape,
-            color = if (fullScreen) Color.Transparent else PoliceColors.Background,
-            border = if (fullScreen) null else BorderStroke(1.dp, PoliceColors.Border)) {
-            Column(Modifier.padding(if (fullScreen) 16.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (fullScreen) {
-                        IconButton(onClick = onDismiss, enabled = enabled) {
-                            Icon(painterResource(R.drawable.ic_back), contentDescription = "Back to workout")
+        Surface(frame, shape = RectangleShape, color = Color.Transparent, contentColor = PoliceColors.Text) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Keep this arrangement stable as the landscape keyboard opens, preserving
+                // focus and leaving the available height for the editable fields.
+                if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE && maxWidth > 500.dp) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onDismiss, enabled = enabled) {
+                                    Icon(painterResource(R.drawable.ic_back), contentDescription = backLabel)
+                                }
+                                Text(title, Modifier.weight(1f).semantics { heading() },
+                                    style = MaterialTheme.typography.titleMedium, color = PoliceColors.Text)
+                            }
+                            footer?.let { controls -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically, content = controls) }
                         }
-                    } else ShieldMark(Modifier.size(34.dp))
-                    Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
-                    SirenRule(Modifier.width(30.dp))
+                        VerticalDivider(color = PoliceColors.Border)
+                        Box(Modifier.weight(1f).fillMaxHeight()) { formBody() }
+                    }
+                } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconButton(onClick = onDismiss, enabled = enabled) {
+                            Icon(painterResource(R.drawable.ic_back), contentDescription = backLabel)
+                        }
+                        Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+                        SirenRule(Modifier.width(30.dp))
+                    }
+                    Box(Modifier.weight(1f)) { formBody() }
+                    footer?.let { controls ->
+                        HorizontalDivider(color = PoliceColors.Border)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically, content = controls)
+                    }
                 }
-                content()
-                HorizontalDivider(color = PoliceColors.Border)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically, content = footer)
             }
         }
     }
 }
 
 @Composable
-private fun AddExerciseDialog(form: ExerciseFormState, onDismiss: () -> Unit, onEdit: () -> Unit,
-    onAdd: (String, String, String, String, String) -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var equipment by rememberSaveable { mutableStateOf("") }
-    var description by rememberSaveable { mutableStateOf("") }
-    var primary by rememberSaveable { mutableStateOf("") }
-    var secondary by rememberSaveable { mutableStateOf("") }
-    ExerciseDialogFrame("Add exercise", !form.saving, onDismiss, footer = {
+private fun ExerciseFormDialog(form: ExerciseFormState, onDismiss: () -> Unit, onEdit: () -> Unit,
+    exercise: Exercise? = null, onSave: (String, String, String, String, String) -> Unit) {
+    var name by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.name.orEmpty()) }
+    var equipment by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.equipment.orEmpty()) }
+    var description by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.description.orEmpty()) }
+    var primary by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.primaryMuscles.orEmpty()) }
+    var secondary by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.secondaryMuscles.orEmpty()) }
+    ExerciseDialogFrame(if (exercise == null) "Create New Exercise" else "Edit exercise details", !form.saving, onDismiss,
+        screenTag = "exercise-editor-screen", backLabel = "Close exercise form", footer = {
         TextButton(onClick = onDismiss, enabled = !form.saving) { Text("Cancel") }
         Spacer(Modifier.width(12.dp))
-        PoliceButton(onClick = { onAdd(name, equipment, description, primary, secondary) }, enabled = !form.saving,
+        PoliceButton(onClick = { onSave(name, equipment, description, primary, secondary) }, enabled = !form.saving,
             modifier = Modifier.testTag("save-exercise")) {
             Text(if (form.saving) "Saving…" else "Save")
         }
     }) {
-        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("exercise-form"),
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).testTag("exercise-form"),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Add a movement to your exercise library. All fields except secondary muscles are required.",
+            Text((if (exercise == null) "Add a movement to your exercise library." else "Update this movement in your exercise library.") +
+                " All fields except secondary muscles are required.",
                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
             OutlinedTextField(name, { name = it; onEdit() }, label = { Text("Exercise name") }, singleLine = true,
                 enabled = !form.saving, modifier = Modifier.fillMaxWidth().testTag("exercise-name"))
@@ -236,51 +300,78 @@ private fun AddExerciseDialog(form: ExerciseFormState, onDismiss: () -> Unit, on
 @Composable
 internal fun ExercisePickerDialog(exercises: List<Exercise>, saving: Boolean, error: String?,
     form: ExerciseFormState, onResetForm: () -> Unit, onAddExercise: (String, String, String, String, String) -> Unit,
-    onDismiss: () -> Unit, onSelect: (String) -> Unit) {
+    onDismiss: () -> Unit, onSelect: (String) -> Unit,
+    selectedExerciseIds: Set<String> = emptySet(), onRemove: ((String) -> Unit)? = null,
+    title: String = "Add Exercise", selectLabel: String = "Add", backLabel: String = "Back to workout",
+    allowCreate: Boolean = true) {
     var query by rememberSaveable { mutableStateOf("") }
     var showForm by rememberSaveable { mutableStateOf(false) }
     var selectedNames by rememberSaveable { mutableStateOf(MuscleGroup.entries.map { it.name }) }
+    var onlySelected by rememberSaveable { mutableStateOf(false) }
+    val multiple = onRemove != null
     val selected = selectedMuscleGroups(selectedNames)
     val groups = remember(exercises) { availableMuscleGroups(exercises) }
-    val matches = remember(exercises, query, selected) { filterExercises(filterByMuscleGroups(exercises, selected), query) }
+    val matches = remember(exercises, query, selected, onlySelected, selectedExerciseIds, multiple) {
+        filterExercises(filterByMuscleGroups(exercises, selected), query).filter {
+            !multiple || !onlySelected || it.id in selectedExerciseIds
+        }
+    }
     LaunchedEffect(form.saved) {
         if (showForm && form.saved) {
             showForm = false
             query = ""
+            onlySelected = false
             selectedNames = MuscleGroup.entries.map { it.name }
             onResetForm()
         }
     }
-    if (showForm) AddExerciseDialog(form,
-        onDismiss = { showForm = false; onResetForm() }, onEdit = onResetForm, onAdd = onAddExercise)
-    else ExerciseDialogFrame("Add Exercise", !saving, onDismiss, fullScreen = true,
-        footer = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") } }) {
+    if (showForm) ExerciseFormDialog(form,
+        onDismiss = { showForm = false; onResetForm() }, onEdit = onResetForm, onSave = onAddExercise)
+    else ExerciseDialogFrame(title, !saving, onDismiss, backLabel = backLabel) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ExerciseSearch(query, { query = it }, "exercise-picker-search", Modifier.weight(1f))
-            PoliceIconButton(onClick = { onResetForm(); showForm = true }, enabled = !saving && !form.saving,
+            if (allowCreate) PoliceIconButton(onClick = { onResetForm(); showForm = true }, enabled = !saving && !form.saving,
                 modifier = Modifier.size(48.dp).testTag("add-picker-exercise"), shape = RoundedCornerShape(12.dp)) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = "Add exercise")
             }
         }
         LazyColumn(Modifier.weight(1f).testTag("exercise-picker-list"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (multiple) item(key = "selection") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    FilterChip(selected = onlySelected, onClick = {
+                        onlySelected = !onlySelected
+                        if (onlySelected) {
+                            query = ""
+                            selectedNames = MuscleGroup.entries.map { it.name }
+                        }
+                    }, enabled = !saving, label = { Text("${selectedExerciseIds.size} selected") },
+                        modifier = Modifier.testTag("exercise-picker-selected-count").semantics {
+                            contentDescription = if (onlySelected) "Show all exercises" else "Show selected exercises"
+                        })
+                }
+            }
             item(key = "filters") {
                 ExerciseMuscleFilters(selected, groups, onChange = { selectedNames = it.map { group -> group.name } })
             }
             item(key = "count") {
-                Text("${matches.size} of ${exercises.size} exercises · select Add to use a movement", color = PoliceColors.Muted,
+                val hint = if (selectLabel == "Select") "choose an exercise" else "select $selectLabel to use a movement"
+                Text("${matches.size} of ${exercises.size} exercises · $hint", color = PoliceColors.Muted,
                     style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("exercise-picker-count"))
             }
             if (matches.isEmpty()) item(key = "empty") {
                 Text(when {
-                    exercises.isEmpty() -> "Use + above to add your first exercise."
+                    exercises.isEmpty() -> if (allowCreate) "Use + above to add your first exercise." else "No exercises are available to select."
+                    multiple && onlySelected && selectedExerciseIds.isEmpty() -> "Nothing selected yet. Tap 0 selected to see all exercises."
                     selected.isEmpty() -> "Select at least one muscle group, or select all."
                     else -> "No matches. Try another group, name, equipment, or muscle."
                 }, color = PoliceColors.Muted)
             }
             items(matches, key = { it.id }) { exercise ->
-                ExerciseCatalogCard(exercise, enabled = !saving, onSelect = { onSelect(exercise.id) })
+                val included = multiple && exercise.id in selectedExerciseIds
+                ExerciseCatalogCard(exercise, enabled = !saving, selected = included, selectLabel = selectLabel,
+                    onSelect = { if (included) onRemove?.invoke(exercise.id) else onSelect(exercise.id) })
             }
         }
         error?.let { Text(it, color = PoliceColors.Error) }

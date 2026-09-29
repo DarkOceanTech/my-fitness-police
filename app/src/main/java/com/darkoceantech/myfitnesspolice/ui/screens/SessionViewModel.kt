@@ -103,14 +103,25 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     fun finishSession(workout: String) = perform("finish-session") { repository.finishWorkout(workout) }
     fun start() = perform { repository.startWorkout() }
     fun setDetails(field: String, value: String, planId: String? = null) = perform { repository.setWorkoutDetails(field, value, planId) }
+    private val _editingPlanId = MutableStateFlow<String?>(null)
+    val editingPlanId = _editingPlanId.asStateFlow()
+    fun beginPlanEdit(planId: String) = perform("begin-plan-edit") {
+        _editingPlanId.value = repository.workoutEditor.begin(planId)
+    }
+    fun discardPlanEdit(planId: String) = perform("discard-plan-edit") {
+        repository.workoutEditor.discard(planId)
+        _editingPlanId.value = null
+    }
     fun deletePlan(id: String) = perform("delete-plan") { repository.deletePlan(id) }
     fun savePlan(id: String, name: String? = null) = perform("save-plan") { repository.savePlan(id, name) }
     fun saveTrainingPlan(id: String?, name: String, workouts: List<String>, day: String) =
         perform("save-training-plan") { repository.trainingPlans.save(id, name, workouts, day) }
+    fun saveTrainingPlanItems(id: String?, name: String, items: List<TrainingPlanItem>, day: String) =
+        perform("save-training-plan") { repository.trainingPlans.saveItems(id, name, items, day) }
     fun startTraining(id: String) = perform("start-training") { repository.startTraining(id) }
     fun deleteTrainingPlan(id: String) = perform("delete-training-plan") { repository.trainingPlans.delete(id) }
     fun startPlan(id: String) = perform("start-plan") { repository.startPlan(id) }
-    fun clearDraft() = perform { repository.clearDraft() }
+    fun clearDraft() = perform("clear-draft") { repository.clearDraft() }
     fun saveMetadata(id: String, name: String, muscles: String, day: String, plans: List<String>) =
         perform("save-metadata") { repository.saveWorkoutDetails(id, name, muscles, day, plans) }
     fun reorderExercises(id: String, entries: List<String>) =
@@ -119,7 +130,7 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
         perform("remove-exercise") { repository.removeWorkoutExercise(workout, entry) }
     fun saveEquipmentPositions(workout: String, entry: String, positions: List<EquipmentPosition>) =
         perform("save-equipment-positions") { repository.saveEquipmentPositions(workout, entry, positions) }
-    fun chooseExercise(id: String, planId: String? = null) = perform { repository.chooseExercise(id, planId) }
+    fun chooseExercise(id: String, planId: String? = null) = perform("choose-exercise") { repository.chooseExercise(id, planId) }
     fun addDefaultSet(workout: String, entry: String) = perform { repository.saveSet(workout, entry, null, 10, 0) }
     fun copyLastSet(workout: String, entry: String) = perform { repository.copyLastSet(workout, entry) }
     fun sessionNote(workout: String, entry: String, value: String) = perform("session-note") { repository.updateExerciseNote(workout, entry, value) }
@@ -135,19 +146,23 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     fun deleteWorkout(id: String) = perform("delete-history-workout") { repository.deleteWorkout(id) }
     fun deleteAllHistory() = perform("delete-all-history") { repository.deleteAllHistory() }
     fun renameHistoryWorkout(id: String, name: String) = perform("rename-history-workout") { repository.renameHistoryWorkout(id, name) }
+    fun groupHistoryWorkouts(ids: List<String>, trainingPlanId: String? = null, newPlanName: String? = null) =
+        perform("group-history-workouts") { repository.groupHistoryWorkouts(ids, trainingPlanId, newPlanName) }
+    fun replaceHistoryExercise(workoutId: String, entryId: String, newExerciseId: String) =
+        perform("replace-history-exercise") { repository.replaceHistoryExercise(workoutId, entryId, newExerciseId) }
     fun saveHistorySetNote(workout: String, set: String, notes: String) = perform("save-history-set-note") {
         repository.saveHistorySetNote(workout, set, notes)
     }
     fun saveActiveSetNote(workout: String, set: String, notes: String) = perform("save-active-set-note") {
         repository.saveActiveSetNote(workout, set, notes)
     }
-    fun correctHistorySet(workout: String, set: String, pounds: String?, planned: String, actual: String, rpe: Int?) =
+    fun correctHistorySet(workout: String, set: String, pounds: String?, planned: String, actual: String, rpe: Int?, isWarmup: Boolean? = null) =
         correctRecordedSet("correct-history-set", pounds, planned, actual, rpe) { grams, plannedCount, actualCount, effort ->
-            repository.correctHistorySet(workout, set, grams, plannedCount, actualCount, effort)
+            repository.correctHistorySet(workout, set, grams, plannedCount, actualCount, effort, isWarmup)
         }
-    fun correctActiveSet(workout: String, set: String, pounds: String?, planned: String, actual: String, rpe: Int?) =
+    fun correctActiveSet(workout: String, set: String, pounds: String?, planned: String, actual: String, rpe: Int?, isWarmup: Boolean? = null) =
         correctRecordedSet("correct-active-set", pounds, planned, actual, rpe) { grams, plannedCount, actualCount, effort ->
-            repository.correctActiveSet(workout, set, grams, plannedCount, actualCount, effort)
+            repository.correctActiveSet(workout, set, grams, plannedCount, actualCount, effort, isWarmup)
         }
     private fun correctRecordedSet(operation: String, pounds: String?, planned: String, actual: String, rpe: Int?,
         save: suspend (Long?, Int, Int, Int?) -> Unit) = perform(operation) {

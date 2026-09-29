@@ -3,25 +3,40 @@ package com.darkoceantech.myfitnesspolice.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.darkoceantech.myfitnesspolice.R
 
 @Composable
-fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier) {
+fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier, onGroupWorkouts: (() -> Unit)? = null) {
     var showDor by rememberSaveable { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().testTag("progress-history-home")) {
         SectionPageHeader("Progress Reports",
-            location = "Pain = Progress\nInspired by Ray Dalio’s ‘Pain + Reflection = Progress’")
+            location = "Pain = Progress\nInspired by Ray Dalio’s ‘Pain + Reflection = Progress’") {
+            if (onGroupWorkouts != null) Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("reports-options")
+                    .semantics { contentDescription = "Progress Reports options" }) { Text("⋮", fontSize = 26.sp) }
+                DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Group workouts into plan") },
+                        modifier = Modifier.testTag("group-history-workouts-menu"),
+                        onClick = { menu = false; onGroupWorkouts() })
+                }
+            }
+        }
         LazyVerticalGrid(columns = GridCells.Adaptive(152.dp),
             modifier = Modifier.weight(1f).testTag("progress-history-grid"),
             contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item(key = "history") {
-                SectionLaunchCard("Workout History", "Review completed workouts, sets, reps, and notes.",
+                SectionLaunchCard("Workout Log", "Review completed workouts, sets, reps, and notes.",
                     R.drawable.ic_library, "progress-history-tile", onHistory)
             }
             item(key = "dor") {
