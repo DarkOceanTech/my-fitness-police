@@ -20,10 +20,14 @@ class CurrentSessionNavigationTest {
         try {
             compose.setContent { MyFitnessPoliceApp(repo) }
             waitTag("return-to-active-workout")
-            listOf("Dispatch", "Academy", "Field", "Reports", "Armory").forEach { tab ->
+            listOf("Dispatch", "Academy", "Field", "Reports", "Precinct").forEach { tab ->
                 navigate(tab)
                 compose.onNodeWithTag("return-to-active-workout").assertIsDisplayed()
-                    .assert(hasText("Paused", substring = true)).performClick()
+                    .assert(hasText("Paused", substring = true))
+                    .assert(hasText("Back training plan"))
+                    .assert(hasText("Active 0:30"))
+                    .assert(hasText("Break 0:00"))
+                    .assert(hasText("Return to workout").not()).performClick()
                 waitTag("active-workout-header")
                 compose.onNodeWithText("Paused back training").assertIsDisplayed()
                 compose.onNodeWithTag("return-to-active-workout").assertDoesNotExist()
@@ -62,14 +66,17 @@ class CurrentSessionNavigationTest {
         try {
             compose.setContent { MyFitnessPoliceApp(repo) }
             waitTag("return-to-active-workout")
-            compose.onNodeWithTag("return-to-active-workout").assert(hasText("Ready to start", substring = true))
+            compose.onNodeWithTag("return-to-active-workout")
+                .assert(hasText("Back training plan"))
+                .assert(hasText("Active 0:00"))
+                .assert(hasText("Break 0:00"))
             runBlocking { repo.sessionProgress.cancelUnstartedSession("session") }
             waitTag("return-to-active-workout", present = false)
             val newSession = runBlocking { repo.startPlan("plan") }
             waitTag("return-to-active-workout")
             runBlocking { repo.finishWorkout(newSession) }
             waitTag("return-to-active-workout", present = false)
-            listOf("Academy", "Field", "Reports", "Armory").forEach { tab ->
+            listOf("Academy", "Field", "Reports", "Precinct").forEach { tab ->
                 navigate(tab)
                 compose.onNodeWithTag("return-to-active-workout").assertDoesNotExist()
             }
@@ -114,7 +121,7 @@ class CurrentSessionNavigationTest {
             compose.onNodeWithTag("navigation-donut-chase").assertDoesNotExist()
             compose.onNodeWithTag("landscape-navigation-items").assertDoesNotExist()
             compose.mainClock.autoAdvance = true
-            navigate("Armory")
+            navigate("Precinct")
             compose.onNodeWithTag("return-to-active-workout").assertIsDisplayed()
             compose.onNodeWithTag("main-navigation").assertIsDisplayed()
         } finally { compose.mainClock.autoAdvance = true; db.close() }
@@ -126,7 +133,7 @@ class CurrentSessionNavigationTest {
         val repo = FitnessRepository(db)
         runBlocking {
             db.exerciseDao().insert(Exercise(id = "row", name = "Cable row", equipment = "Cable machine"))
-            db.workoutDao().insert(Workout(id = "session", name = "Paused back training"))
+            db.workoutDao().insert(Workout(id = "session", name = "Paused back training", trainingPlan = "Back training plan"))
             db.workoutExerciseDao().insert(WorkoutExercise(id = "active-row", workoutId = "session", exerciseId = "row", position = 0))
             (1..3).forEach { number ->
                 db.workoutSetDao().insert(WorkoutSet(id = "s$number", workoutExerciseId = "active-row", position = number - 1,
@@ -136,6 +143,7 @@ class CurrentSessionNavigationTest {
             if (started) {
                 repo.sessionProgress.startSet("session", "s1")
                 repo.sessionProgress.pause("session")
+                db.sessionStateDao().save(db.sessionStateDao().get("session")!!.copy(phaseElapsedMillis = 30_000L))
             }
             db.workoutDao().insert(Workout(id = "plan", kind = "plan", name = "Back variation"))
             db.workoutExerciseDao().insert(WorkoutExercise(id = "plan-row", workoutId = "plan", exerciseId = "row", position = 0))

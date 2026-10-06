@@ -34,11 +34,14 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.darkoceantech.myfitnesspolice.AppDestinations
 import com.darkoceantech.myfitnesspolice.R
 import com.darkoceantech.myfitnesspolice.data.WorkoutDetails
 import com.darkoceantech.myfitnesspolice.data.displayName
 import com.darkoceantech.myfitnesspolice.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlin.math.sin
 
 @Composable
@@ -69,21 +72,30 @@ private fun DestinationIcon(destination: AppDestinations, selected: Boolean) {
 @Composable
 internal fun CurrentSessionShortcut(workout: WorkoutDetails, onOpen: () -> Unit) {
     val progress = workout.sessionState
-    val status = when {
-        progress?.isPaused == true -> "Paused"
-        progress?.phase == "cooldown" -> "Final cool-down"
-        progress?.hasStarted != true -> "Ready to start"
-        else -> "In progress"
-    }
+    val clock = remember(workout.workout.id) { flow {
+        while (true) { emit(System.currentTimeMillis()); delay(1000) }
+    } }
+    val now by clock.collectAsStateWithLifecycle(initialValue = System.currentTimeMillis())
+    val currentSet = workout.orderedSets().firstOrNull { it.id == progress?.currentSetId }
+    val active = if (progress?.phase == "active") progress.phaseMillis(now) else currentSet?.activeMillis ?: 0L
+    val rest = if (progress?.phase in listOf("rest", "cooldown")) progress?.phaseMillis(now) ?: 0L else 0L
+    val planName = workout.workout.trainingPlan.ifBlank { workout.workout.displayName() }
     Surface(onClick = onOpen, color = PoliceColors.Raised, contentColor = PoliceColors.Text,
         modifier = Modifier.fillMaxWidth().testTag("return-to-active-workout")) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 40.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(painterResource(R.drawable.ic_workout), null, tint = PoliceColors.LightBlue, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f)) {
-                Text("Return to workout", style = MaterialTheme.typography.labelLarge)
-                Text("$status · ${workout.workout.displayName()}", style = MaterialTheme.typography.bodySmall,
-                    color = PoliceColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(planName, style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("current-session-plan"))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Active ${sessionTime(active)}", style = MaterialTheme.typography.bodySmall,
+                        color = PoliceColors.Muted, modifier = Modifier.testTag("current-session-active-time"))
+                    Text("Break ${sessionTime(rest)}", style = MaterialTheme.typography.bodySmall,
+                        color = PoliceColors.Muted, modifier = Modifier.testTag("current-session-break-time"))
+                    if (progress?.isPaused == true) Text("Paused", style = MaterialTheme.typography.labelSmall,
+                        color = PoliceColors.LightBlue)
+                }
             }
             Text("→", color = PoliceColors.LightBlue, fontSize = 22.sp)
         }

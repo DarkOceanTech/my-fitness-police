@@ -37,10 +37,10 @@
       </SelectionState>
       <SelectionState runConfigName="androidTest">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-29T03:27:59.123037400Z">
+        <DropdownSelection timestamp="2026-10-01T20:30:58.525787500Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=R3CWA0HRF8R" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\horac\.android\avd\Medium_Phone.avd" />
             </handle>
           </Target>
         </DropdownSelection>

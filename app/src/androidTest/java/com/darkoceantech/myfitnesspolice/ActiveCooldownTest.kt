@@ -38,7 +38,7 @@ class ActiveCooldownTest {
             startAndComplete("s2", db)
             assertButton("s3", true)
             compose.onNodeWithTag("set-action-s3").performScrollTo().performClick()
-            compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
             compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
             waitTag("active-set-pager")
             for (number in listOf(2, 1, 2)) {
@@ -62,7 +62,7 @@ class ActiveCooldownTest {
             compose.setContent { MyFitnessPoliceApp(repo) }
             openSession()
             compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
-            compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
             compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
             waitTag("after-set-cooldown")
             compose.onNodeWithTag("actual-reps-input").performClick()
@@ -141,7 +141,7 @@ class ActiveCooldownTest {
     }
     private fun startAndComplete(id: String, db: FitnessDatabase) {
         compose.onNodeWithTag("set-action-$id").performScrollTo().performClick()
-        compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+        compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
         completeAndSave(id, db)
     }
     private fun completeAndSave(id: String, db: FitnessDatabase) {

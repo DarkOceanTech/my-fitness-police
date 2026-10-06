@@ -84,6 +84,7 @@ class FitnessViewModelFactory(private val repository: FitnessRepository) : ViewM
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
         SessionViewModel::class.java -> SessionViewModel(repository)
+        DashboardViewModel::class.java -> DashboardViewModel(com.darkoceantech.myfitnesspolice.data.DashboardRepository(repository))
         ExercisesViewModel::class.java -> ExercisesViewModel(repository)
         HistoryViewModel::class.java -> HistoryViewModel(repository)
         WorkoutViewModel::class.java -> WorkoutViewModel(repository)

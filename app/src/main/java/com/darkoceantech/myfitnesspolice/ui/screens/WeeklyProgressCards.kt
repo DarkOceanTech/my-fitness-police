@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.formatting.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -67,7 +69,7 @@ internal fun ProgressChartCard(metric: ProgressMetric, weekly: WeeklyProgress?, 
         when (metric) {
             ProgressMetric.Sets -> number.format(it.sets)
             ProgressMetric.Reps -> number.format(it.reps)
-            ProgressMetric.Weight -> number.format(it.weightPounds)
+            ProgressMetric.Weight -> formatWeight(it.weightPounds)
             ProgressMetric.Activity -> number.format(it.activityMillis.coerceAtLeast(0) / 60_000)
         }
     } ?: "—"

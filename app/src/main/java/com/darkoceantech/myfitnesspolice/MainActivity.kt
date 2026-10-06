@@ -37,12 +37,16 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
     val factory = remember(repository) { FitnessViewModelFactory(repository) }
     val sessionModel: SessionViewModel = viewModel(factory = factory)
     val exercisesModel: ExercisesViewModel = viewModel(factory = factory)
+    val dashboardModel: DashboardViewModel = viewModel(factory = factory)
+    var launchPlanId by rememberSaveable { mutableStateOf<String?>(null) }
+    var dispatchDay by rememberSaveable { mutableStateOf(java.time.LocalDate.now().toString()) }
+    var historyFromLaunchpad by rememberSaveable { mutableStateOf(false) }
     val sessions by sessionModel.state.collectAsStateWithLifecycle()
     val currentSession = sessions.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
     var historySelection by rememberSaveable { mutableStateOf<String?>(null) }
     var historyOpen by rememberSaveable { mutableStateOf(false) }
     var historyGrouping by rememberSaveable { mutableStateOf(false) }
-    var armorySelection by rememberSaveable { mutableStateOf<ArmoryFeature?>(null) }
+    var precinctSelection by rememberSaveable { mutableStateOf<PrecinctFeature?>(null) }
     var ptoSelection by rememberSaveable { mutableStateOf<PtoActivity?>(null) }
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.DISPATCH) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -52,6 +56,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
         automaticallyFinished?.let { id ->
             // The active route retains its final summary, including the final rest time.
             if (!trainingVisible || currentDestination != AppDestinations.ACADEMY) {
+                historyFromLaunchpad = false
                 historySelection = id
                 historyOpen = true
                 settingsOpen = false
@@ -61,12 +66,10 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
         }
     }
     fun selectDestination(destination: AppDestinations) {
+        historyFromLaunchpad = false
         historyGrouping = false
         settingsOpen = false
         trainingVisible = false
-        if (destination == AppDestinations.DOR) { historyOpen = false; historySelection = null }
-        if (destination == AppDestinations.PTO) ptoSelection = null
-        if (destination == AppDestinations.ARMORY) armorySelection = null
         currentDestination = destination
     }
     fun returnToSession() {
@@ -86,13 +89,18 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                         val screenModifier = Modifier.fillMaxSize()
                         when (currentDestination) {
                             AppDestinations.DISPATCH -> {
-                                val weekly by sessionModel.weeklyProgress.collectAsStateWithLifecycle()
                                 if (settingsOpen) DemoSettingsScreen(screenModifier, onBack = { settingsOpen = false })
-                                else DashboardScreen(weekly, screenModifier, onSettings = { settingsOpen = true })
+                                else DashboardRoute(dashboardModel, screenModifier, onSettings = { settingsOpen = true },
+                                    selectedDay = java.time.LocalDate.parse(dispatchDay), onDayChanged = { dispatchDay = it.toString() },
+                                    onPlan = { id -> launchPlanId = id; selectDestination(AppDestinations.ACADEMY) },
+                                    onLog = { id -> historySelection = id; historyOpen = true; selectDestination(AppDestinations.DOR); historyFromLaunchpad = true })
                             }
                             AppDestinations.ACADEMY -> WorkoutHomeRoute(sessionModel, exercisesModel, screenModifier,
+                                requestedPlanId = launchPlanId, requestedScheduleDate = dispatchDay, onPlanRequestHandled = { launchPlanId = null },
+                                onReturnToLaunchpad = { selectDestination(AppDestinations.DISPATCH) },
                                 trainingVisible = trainingVisible, onTrainingVisibleChange = { trainingVisible = it },
                                 onFinished = { id ->
+                                    historyFromLaunchpad = false
                                     trainingVisible = false
                                     historySelection = id
                                     historyOpen = true
@@ -101,11 +109,15 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                             AppDestinations.PTO -> PtoRoute(ptoSelection, onSelect = { ptoSelection = it }, modifier = screenModifier)
                             AppDestinations.DOR -> {
                                 if (historyOpen) WorkoutHistoryScreen(sessionModel, historySelection, { historySelection = it }, screenModifier,
-                                    onBack = { historyOpen = false; historySelection = null })
+                                    onBack = { historyOpen = false; historySelection = null },
+                                    selectedBackLabel = if (historyFromLaunchpad) "Back to Launchpad" else null,
+                                    onSelectedBack = if (historyFromLaunchpad) ({
+                                        historyOpen = false; historySelection = null; selectDestination(AppDestinations.DISPATCH)
+                                    }) else null)
                                 else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier,
                                     onGroupWorkouts = { sessionModel.clearError(); historyGrouping = true })
                             }
-                            AppDestinations.ARMORY -> ArmoryRoute(armorySelection, onSelect = { armorySelection = it }, modifier = screenModifier)
+                            AppDestinations.PRECINCT -> PrecinctRoute(precinctSelection, onSelect = { precinctSelection = it }, modifier = screenModifier)
                         }
                     }
                     if (currentSession != null && !(currentDestination == AppDestinations.ACADEMY && trainingVisible)) {
@@ -128,5 +140,5 @@ enum class AppDestinations(val label: Int, val icon: Int) {
     ACADEMY(R.string.nav_academy, R.drawable.ic_workout),
     PTO(R.string.nav_pto, R.drawable.ic_pto),
     DOR(R.string.nav_dor, R.drawable.ic_progress),
-    ARMORY(R.string.nav_armory, R.drawable.ic_armory),
+    PRECINCT(R.string.nav_precinct, R.drawable.ic_precinct),
 }

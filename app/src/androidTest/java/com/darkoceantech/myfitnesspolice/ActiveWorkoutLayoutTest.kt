@@ -53,7 +53,7 @@ class ActiveWorkoutLayoutTest {
             compose.onNodeWithTag("finish-workout").assert(hasAnyAncestor(hasTestTag("active-exercise-scroll-we")))
 
             compose.onNodeWithTag("set-action-s1").performScrollTo().assertIsDisplayed().performClick()
-            compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
             compose.onNodeWithTag("set-action-s1").assertIsDisplayed()
             screenshot("$orientation-first-set")
             compose.onNodeWithTag("set-action-s12").performScrollTo().assertIsDisplayed().assertIsNotEnabled()

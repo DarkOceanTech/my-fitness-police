@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.formatting.*
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,6 +52,8 @@ internal fun RecordedSetInfoPanel(
         onDispose { onNavigationLocked(false) }
     }
     val dirty = editing && (weight != originalWeight || planned != set.reps.toString() || actual != originalActual || rpe != set.rpe || warmup != set.isWarmup)
+    val repColor = repComparisonColor(if (editing) planned.toInt() else set.reps,
+        if (editing) actual.toIntOrNull() else set.actualReps)
     fun resetDraft() {
         weight = originalWeight; planned = set.reps.toString(); actual = originalActual; rpe = set.rpe; warmup = set.isWarmup
     }
@@ -103,15 +107,18 @@ internal fun RecordedSetInfoPanel(
                     if (!canEdit) Text("This set hasn’t been recorded yet.", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         RecordedNumberField("Weight (Lbs)", if (editing) weight else originalWeight, weights, editing,
-                            "$tagPrefix-set-weight", Modifier.weight(1f), enabled = !action.saving) { weight = it; onEdit() }
+                            "$tagPrefix-set-weight", Modifier.weight(1f), enabled = !action.saving,
+                            formatValue = ::formatPoundsText) { weight = it; onEdit() }
                         RecordedNumberField("RPE", (if (editing) rpe else set.rpe)?.toString() ?: "—", rpeOptions,
                             editing, "$tagPrefix-set-rpe", Modifier.weight(1f), enabled = !action.saving) { rpe = it.toInt(); onEdit() }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         RecordedNumberField("Planned reps", if (editing) planned else set.reps.toString(), plannedOptions,
-                            editing, "$tagPrefix-set-planned", Modifier.weight(1f), enabled = !action.saving) { planned = it; onEdit() }
+                            editing, "$tagPrefix-set-planned", Modifier.weight(1f), enabled = !action.saving,
+                            valueColor = repColor) { planned = it; onEdit() }
                         RecordedNumberField("Actual reps", if (editing) actual else originalActual, actualOptions,
-                            editing, "$tagPrefix-set-actual", Modifier.weight(1f), enabled = !action.saving) { actual = it; onEdit() }
+                            editing, "$tagPrefix-set-actual", Modifier.weight(1f), enabled = !action.saving,
+                            valueColor = repColor) { actual = it; onEdit() }
                     }
                     if (set.modifier != "none") Text(if (set.modifier == "drop_set") "DROP SET" else "SUPERSET",
                         color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
@@ -199,7 +206,9 @@ private fun RecordedSetTypeHeading(
 
 @Composable
 internal fun RecordedNumberField(label: String, value: String, options: List<String>, editable: Boolean,
-    tag: String, modifier: Modifier, enabled: Boolean = true, onSelect: (String) -> Unit) {
+    tag: String, modifier: Modifier, enabled: Boolean = true, valueColor: Color = PoliceColors.Text,
+    formatValue: (String) -> String = { it },
+    onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
@@ -210,7 +219,7 @@ internal fun RecordedNumberField(label: String, value: String, options: List<Str
                 shape = RoundedCornerShape(10.dp), color = if (editable) PoliceColors.Background else Color.Transparent,
                 border = if (editable) BorderStroke(1.dp, PoliceColors.LightBlue) else null) {
                 Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(value, style = StatTypography.copy(fontSize = 24.sp))
+                    Text(formatValue(value), style = StatTypography.copy(fontSize = 24.sp), color = valueColor)
                     if (editable) Text("↕", color = PoliceColors.LightBlue)
                 }
             }
@@ -218,12 +227,18 @@ internal fun RecordedNumberField(label: String, value: String, options: List<Str
                 val scroll = rememberLazyListState(initialFirstVisibleItemIndex = (options.indexOf(value) - 2).coerceAtLeast(0))
                 LazyColumn(Modifier.width(200.dp).height(240.dp).testTag("$tag-options"), state = scroll) {
                     items(options, key = { it }) { option ->
-                        DropdownMenuItem(text = { Text(option, color = if (option == value) PoliceColors.LightBlue else PoliceColors.Text) },
+                        DropdownMenuItem(text = { Text(formatValue(option), color = if (option == value) PoliceColors.LightBlue else PoliceColors.Text) },
                             onClick = { onSelect(option); expanded = false })
                     }
                 }
             }
         }
     }
+}
+
+internal fun repComparisonColor(planned: Int, actual: Int?): Color = when {
+    actual == null || actual == planned -> PoliceColors.Text
+    actual > planned -> PoliceColors.Red
+    else -> PoliceColors.LightBlue
 }
 

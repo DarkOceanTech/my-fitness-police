@@ -12,7 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -37,6 +40,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     planId: String? = null, onBack: () -> Unit = {}, onDeleted: () -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
+    val lastSession by model.lastSession.collectAsStateWithLifecycle()
     val exerciseForm by exercisesModel.form.collectAsStateWithLifecycle()
     val editingId = planId?.let { WorkoutEditorRepository.editId(it) }
     LaunchedEffect(planId) { model.clearError() }
@@ -57,6 +61,24 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         }
     }
     var saved by remember { mutableStateOf(false) }
+    var importing by rememberSaveable(planId) { mutableStateOf(false) }
+    var imported by remember(planId) { mutableStateOf(false) }
+    var importError by remember(planId) { mutableStateOf<String?>(null) }
+    var lastSessionEntry by rememberSaveable(planId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(lastSessionEntry, workout?.workout?.id) {
+        val entryId = lastSessionEntry
+        val workoutId = workout?.workout?.id
+        if (entryId != null && workoutId != null) model.loadLastSession(workoutId, entryId)
+    }
+    DisposableEffect(model) { onDispose { model.clearLastSession() } }
+    fun closeLastSession() {
+        if (!action.saving) {
+            lastSessionEntry = null
+            importError = null
+            model.clearLastSession()
+            model.clearError()
+        }
+    }
     val contentSnapshot = remember(workout) { workout?.editSnapshot() }
     val savedSnapshot = remember(original) { original?.editSnapshot() }
     val hasChanges = if (planId == null) !draftName.isNullOrBlank() || workout?.let {
@@ -64,6 +86,16 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     } == true else savedSnapshot != null && contentSnapshot != null && contentSnapshot != savedSnapshot
     LaunchedEffect(saved) {
         if (saved) { delay(6000); saved = false }
+    }
+    LaunchedEffect(imported) {
+        if (imported) { delay(6000); imported = false }
+    }
+    LaunchedEffect(action.saving, action.error) {
+        if (action.saving || action.error == null) importError = null
+        else if (importing && action.error != null) {
+            importing = false
+            importError = action.error
+        }
     }
     var picker by rememberSaveable { mutableStateOf(false) }
     var equipmentEntry by rememberSaveable { mutableStateOf<String?>(null) }
@@ -77,6 +109,8 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     var leaving by rememberSaveable(planId) { mutableStateOf(false) }
     var exitAfterSave by rememberSaveable(planId) { mutableStateOf(false) }
     var discarding by rememberSaveable(planId) { mutableStateOf(false) }
+    var draggingSetEntry by remember { mutableStateOf<String?>(null) }
+    val interactionBusy = action.saving || draggingSetEntry != null
     var revision by rememberSaveable { mutableIntStateOf(action.revision) }
     LaunchedEffect(planId, workout?.workout?.id, action.saving, action.error) {
         if (planId != null && workout == null && !action.saving && action.error == null && !discarding && !deleting) {
@@ -95,12 +129,13 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         } else onBack()
     }
     fun requestBack() {
-        if (action.saving) return
+        if (interactionBusy) return
         if (hasChanges) { model.clearError(); leaving = true } else discardAndExit()
     }
     BackHandler { requestBack() }
 
     val list = rememberLazyListState()
+    var listViewport by remember { mutableStateOf(Rect.Zero) }
     var draggedId by remember { mutableStateOf<String?>(null) }
     var draggedTop by remember { mutableFloatStateOf(0f) }
     val edge = with(LocalDensity.current) { 64.dp.toPx() }
@@ -130,6 +165,13 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     }
     LaunchedEffect(action.revision) {
         if (revision != action.revision) {
+            imported = importing && action.completedAction == "import-last-session"
+            if (imported) {
+                lastSessionEntry = null
+                model.clearLastSession()
+            }
+            importing = false
+            importError = null
             if (finishing && action.completedAction == "save-plan") {
                 if (exitAfterSave) {
                     exitAfterSave = false
@@ -155,9 +197,9 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
     }
     Column(modifier.fillMaxSize()) {
         SectionPageHeader(if (planId == null) "Create your Workout" else "Edit workout",
-            onBack = ::requestBack, backLabel = "Back to workout home", enabled = !action.saving) {
+            onBack = ::requestBack, backLabel = "Back to workout home", enabled = !interactionBusy) {
             if (planId != null) Box {
-                IconButton(onClick = { options = true }, enabled = workout != null && !action.saving,
+                IconButton(onClick = { options = true }, enabled = workout != null && !interactionBusy,
                     modifier = Modifier.semantics { contentDescription = "Workout options" }) { Text("⋮", fontSize = 26.sp) }
                 DropdownMenu(options, onDismissRequest = { options = false }) {
                     DropdownMenuItem(text = { Text("Edit details") }, onClick = {
@@ -170,7 +212,18 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
             }
         }
         if (saved) WorkoutSavedNotice(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { saved = false }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("workout-builder"), state = list,
+        if (imported) WorkoutBuilderNotice("Imported", "Imported sets from last session. Save to keep your changes.",
+            "workout-imported", "Dismiss import notification",
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { imported = false }
+        importError?.takeIf { lastSessionEntry == null }?.let { message ->
+            WorkoutBuilderNotice("Could not import", message, "workout-import-error", "Dismiss import error",
+                isError = true, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                importError = null
+                model.clearError()
+            }
+        }
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("workout-builder")
+            .onGloballyPositioned { listViewport = it.boundsInWindow() }, state = list,
             contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (state.loading || (planId != null && workout == null && action.error == null)) item { CircularProgressIndicator() }
             else if (state.failed) item {
@@ -179,7 +232,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
             } else {
                 item(key = "metadata") {
                     if (planId == null) WorkoutDetailsFields((workout?.workout ?: Workout(kind = "draft"))
-                        .copy(name = draftName ?: workout?.workout?.name.orEmpty()), !action.saving) { field, value ->
+                        .copy(name = draftName ?: workout?.workout?.name.orEmpty()), !interactionBusy) { field, value ->
                         if (field == "name") draftName = value else model.setDetails(field, value, workout?.workout?.id)
                     } else workout?.workout?.let { MetadataSummary(it) }
                 }
@@ -190,7 +243,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                             color = PoliceColors.Muted)
                         val allCollapsed = ids.all { it in collapsedIds }
                         TextButton(onClick = { collapsedIds = if (allCollapsed) arrayListOf() else ArrayList(ids) },
-                            enabled = !action.saving && draggedId == null, modifier = Modifier.testTag("toggle-all-exercises")) {
+                            enabled = !interactionBusy && draggedId == null, modifier = Modifier.testTag("toggle-all-exercises")) {
                             Text(if (allCollapsed) "Expand all" else "Collapse all")
                         }
                     }
@@ -199,7 +252,8 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                     val id = entry.workoutExercise.id
                     val dragging = draggedId == id
                     val currentOffset = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.offset ?: 0
-                    BuilderExerciseCard(entry, enabled = !action.saving && draggedId == null,
+                    BuilderExerciseCard(entry, enabled = !action.saving && draggedId == null &&
+                        (draggingSetEntry == null || draggingSetEntry == id),
                         modifier = Modifier.zIndex(if (dragging) 1f else 0f).graphicsLayer {
                             translationY = if (dragging) draggedTop - currentOffset else 0f
                             alpha = if (dragging) .85f else 1f
@@ -207,7 +261,7 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                         collapsed = id in collapsedIds,
                         onToggleCollapse = { collapsedIds = ArrayList(collapsedIds).apply { if (id in this) remove(id) else add(id) } },
                         dropTarget = targetId == id && !dragging,
-                        dragEnabled = !action.saving && ids.size > 1,
+                        dragEnabled = !interactionBusy && ids.size > 1,
                         onDragStart = { draggedTop = currentOffset.toFloat(); draggedId = id },
                         onDrag = { draggedTop += it },
                         onDragEnd = {
@@ -221,27 +275,40 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                         onMoveDown = if (ids.indexOf(id) < ids.lastIndex) { { move(id, ids[ids.indexOf(id) + 1]) } } else null,
                         onAdd = { model.addDefaultSet(workout.workout.id, id) },
                         onCopyLast = { model.copyLastSet(workout.workout.id, id) },
+                        onViewLastSession = {
+                            saved = false
+                            imported = false
+                            importError = null
+                            model.clearError()
+                            model.clearLastSession()
+                            lastSessionEntry = id
+                        },
                         onEquipment = { model.clearError(); equipmentEntry = id },
                         onRemove = { model.removeExercise(workout.workout.id, id) },
                         onDeleteSet = { model.deleteSet(workout.workout.id, id, it) },
                         onNote = { model.clearError(); note = entry.workoutExercise.notes; noteEntry = id },
-                        onChange = { set, field, value -> model.changeSet(workout.workout.id, id, set, field, value) })
+                        onChange = { set, field, value -> model.changeSet(workout.workout.id, id, set, field, value) },
+                        setAction = action, parentListState = list, parentViewport = listViewport,
+                        onSetDragState = { active ->
+                            if (active) draggingSetEntry = id else if (draggingSetEntry == id) draggingSetEntry = null
+                        },
+                        onReorderSets = { model.reorderSets(workout.workout.id, id, it) })
                 }
                 item(key = "actions") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PoliceOutlinedButton(onClick = { model.clearError(); picker = true }, enabled = !action.saving && (planId == null || workout != null),
+                        PoliceOutlinedButton(onClick = { model.clearError(); picker = true }, enabled = !interactionBusy && (planId == null || workout != null),
                             modifier = Modifier.weight(1f).testTag("add-workout-exercise")) { Text("Add Exercise") }
                         PoliceButton(onClick = { model.clearError(); finishing = true },
-                            enabled = !action.saving && hasChanges && entries.any { it.sets.isNotEmpty() },
+                            enabled = !interactionBusy && hasChanges && entries.any { it.sets.isNotEmpty() },
                             modifier = Modifier.weight(1f).testTag("save-workout")) { Text("Save") }
                     }
                 }
                 if (planId == null) item {
                     TextButton(onClick = { model.clearError(); clearing = true },
-                        enabled = !action.saving && (workout != null || !draftName.isNullOrEmpty())) { Text("Clear") }
+                        enabled = !interactionBusy && (workout != null || !draftName.isNullOrEmpty())) { Text("Clear") }
                 }
             }
-            if (action.error != null && !picker && noteEntry == null && !finishing && !metadata && !clearing && !deleting && !leaving && equipmentEntry == null) item {
+            if (action.error != null && importError != action.error && lastSessionEntry == null && !picker && noteEntry == null && !finishing && !metadata && !clearing && !deleting && !leaving && equipmentEntry == null) item {
                 Text(action.error!!, color = MaterialTheme.colorScheme.error)
                 if (planId != null && workout == null) TextButton(onClick = { model.beginPlanEdit(planId) }, enabled = !action.saving) {
                     Text("Retry")
@@ -249,6 +316,14 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
             }
         }
     }
+    if (lastSessionEntry != null && workout != null) LastSessionDialog(lastSession, action.saving, importError,
+        onClose = ::closeLastSession,
+        onRetry = { model.loadLastSession(workout.workout.id, lastSessionEntry!!) },
+        onImport = { sourceEntryId ->
+            importError = null
+            importing = true
+            model.importLastSession(workout.workout.id, lastSessionEntry!!, sourceEntryId)
+        })
     if (deleting && planId != null) AlertDialog(
         onDismissRequest = { if (!action.saving) deleting = false }, title = { Text("Delete this workout?") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -349,16 +424,24 @@ private fun MetadataSummary(workout: Workout) {
 
 @Composable
 private fun WorkoutSavedNotice(modifier: Modifier = Modifier, onDismiss: () -> Unit) {
-    Surface(modifier.fillMaxWidth().testTag("plan-saved").semantics { liveRegion = LiveRegionMode.Polite },
-        shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.ButtonGlow)) {
+    WorkoutBuilderNotice("Saved", "Workout changes saved.", "plan-saved", "Dismiss saved notification",
+        modifier = modifier, onDismiss = onDismiss)
+}
+
+@Composable
+private fun WorkoutBuilderNotice(title: String, message: String, tag: String, dismissLabel: String,
+    isError: Boolean = false, modifier: Modifier = Modifier, onDismiss: () -> Unit) {
+    val accent = if (isError) PoliceColors.Error else PoliceColors.ButtonGlow
+    Surface(modifier.fillMaxWidth().testTag(tag).semantics { liveRegion = LiveRegionMode.Polite },
+        shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, accent)) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("✓", color = PoliceColors.ButtonGlow, fontSize = 24.sp)
+            Text(if (isError) "!" else "✓", color = accent, fontSize = 24.sp)
             Column(Modifier.weight(1f).padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Saved", color = PoliceColors.Text, style = MaterialTheme.typography.titleSmall)
-                Text("Workout changes saved.", color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+                Text(title, color = PoliceColors.Text, style = MaterialTheme.typography.titleSmall)
+                Text(message, color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.semantics { contentDescription = "Dismiss saved notification" }) {
+            IconButton(onClick = onDismiss, modifier = Modifier.semantics { contentDescription = dismissLabel }) {
                 Text("×", color = PoliceColors.LightBlue, fontSize = 24.sp)
             }
         }

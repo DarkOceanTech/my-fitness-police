@@ -8,8 +8,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
-        TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class],
-    version = 14,
+        TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class],
+    version = 15,
     exportSchema = true,
 )
 @androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class)
@@ -20,8 +20,19 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun workoutSetDao(): WorkoutSetDao
     abstract fun sessionStateDao(): WorkoutSessionStateDao
     abstract fun trainingPlanDao(): TrainingPlanDao
+    abstract fun trainingScheduleDao(): TrainingScheduleDao
 
     companion object {
+        val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS training_schedule (
+                    trainingPlanId TEXT NOT NULL, scheduledDate TEXT NOT NULL,
+                    PRIMARY KEY(trainingPlanId, scheduledDate),
+                    FOREIGN KEY(trainingPlanId) REFERENCES training_plans(id) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_training_schedule_scheduledDate ON training_schedule(scheduledDate)")
+                // Weekday preferences are not explicit appointments; do not invent scheduled dates.
+            }
+        }
         val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS training_plan_exercises (
@@ -192,7 +203,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }

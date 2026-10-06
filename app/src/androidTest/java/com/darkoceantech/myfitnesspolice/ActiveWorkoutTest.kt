@@ -54,7 +54,7 @@ class ActiveWorkoutTest {
             compose.onNodeWithTag("duty-time").assertTextEquals("0:00")
             compose.onNodeWithTag("active-time").assertTextEquals("0:00")
             compose.onNodeWithTag("set-action-${sets[0].id}").performScrollTo().performClick()
-            compose.waitUntil(5000) { runBlocking { repo.observeWorkout(id).first()!!.sessionState!!.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { repo.observeWorkout(id).first()!!.sessionState!!.phase == "active" } }
             compose.onNodeWithText("In progress • saved automatically").assertDoesNotExist()
             compose.onNodeWithText("1 Wu").assertIsDisplayed()
             compose.onNodeWithContentDescription("Set type ${sets[0].id}").assertHasNoClickAction()

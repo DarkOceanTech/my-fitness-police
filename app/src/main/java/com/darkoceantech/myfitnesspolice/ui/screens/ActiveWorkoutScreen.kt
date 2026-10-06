@@ -42,6 +42,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
     onBack: () -> Unit, onFinished: (String) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
+    val lastSession by model.lastSession.collectAsStateWithLifecycle()
+    val swapPreview by model.swapPreview.collectAsStateWithLifecycle()
     var displayedSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     val ongoing = state.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
     val workout = state.sessions.firstOrNull { it.workout.id == displayedSessionId } ?: ongoing
@@ -52,13 +54,24 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
     var pauseDialog by rememberSaveable { mutableStateOf(false) }
     var noteId by rememberSaveable { mutableStateOf<String?>(null) }
     var equipmentId by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var plannedSetsId by rememberSaveable { mutableStateOf<String?>(null) }
+    var swapEntryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var countdownSetId by rememberSaveable { mutableStateOf<String?>(null) }
     var revision by rememberSaveable { mutableIntStateOf(action.revision) }
     var infoId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingSetDetails by remember { mutableStateOf(false) }
     var pendingFinishId by rememberSaveable { mutableStateOf<String?>(null) }
-    DisposableEffect(editingSetDetails, noteId, equipmentId, finishDialog) {
-        model.deferAutoFinish(editingSetDetails || noteId != null || equipmentId != null || finishDialog)
+    DisposableEffect(editingSetDetails, noteId, equipmentId, finishDialog, lastSessionId, plannedSetsId, swapEntryId) {
+        model.deferAutoFinish(editingSetDetails || noteId != null || equipmentId != null || finishDialog || lastSessionId != null || plannedSetsId != null || swapEntryId != null)
         onDispose { model.deferAutoFinish(false) }
+    }
+    LaunchedEffect(workout?.workout?.id, lastSessionId) {
+        lastSessionId?.let { id -> workout?.let { model.loadLastSession(it.workout.id, id) } }
+    }
+    DisposableEffect(Unit) { onDispose { model.clearLastSession(); model.clearSwapPreview() } }
+    LaunchedEffect(progress?.phase, progress?.currentSetId) {
+        if (progress?.phase == "active" && progress.currentSetId == countdownSetId) countdownSetId = null
     }
     fun back() {
         when { workout?.workout?.finishedAt != null -> onBack()
@@ -76,6 +89,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                 "finish-session" -> { finishDialog = false; pendingFinishId?.let(onFinished) }
                 "cancel-session" -> onBack()
                 "save-equipment-positions" -> equipmentId = null
+                "edit-active-planned-sets" -> plannedSetsId = null
+                "swap-active-exercise" -> { swapEntryId = null; countdownSetId = null; model.clearSwapPreview() }
                 "pause-session" -> { finishDialog = false; pauseDialog = true }
                 "pause-reason", "resume-session" -> pauseDialog = false
                 "session-note" -> noteId = null
@@ -140,7 +155,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
             }
         }
         val sessionFooter: @Composable () -> Unit = {
-            if (action.error != null && !finishDialog && !pauseDialog && !progress.awaitingActual && noteId == null && infoId == null && equipmentId == null) {
+            if (action.error != null && !finishDialog && !pauseDialog && !progress.awaitingActual && noteId == null && infoId == null && equipmentId == null && plannedSetsId == null && countdownSetId == null && swapEntryId == null) {
                 Text(action.error!!, Modifier.padding(horizontal = 16.dp), color = PoliceColors.Error, style = MaterialTheme.typography.bodySmall)
             }
             Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp).testTag("session-actions"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -222,7 +237,10 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                             onNote = { model.clearError(); noteId = entry.workoutExercise.id },
                             onEquipment = { model.clearError(); equipmentId = entry.workoutExercise.id },
                             onComplete = { model.completeActiveSet(workout.workout.id, it) },
-                            onStart = { model.startNextSet(workout.workout.id, it) },
+                            onStart = { model.clearError(); countdownSetId = it },
+                            onViewLastSession = { model.clearError(); lastSessionId = entry.workoutExercise.id },
+                            onEditPlannedSets = { model.clearError(); plannedSetsId = entry.workoutExercise.id },
+                            onSwapExercise = { model.clearError(); model.clearSwapPreview(); swapEntryId = entry.workoutExercise.id },
                             onInfo = { model.clearError(); infoId = it })
                         val activeEntry = entries.firstOrNull { e -> e.sets.any { it.id == progress.currentSetId } }
                         if (progress.phase == "active" && activeEntry != null && activeEntry != entry) {
@@ -236,6 +254,29 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
             }
         }
         val pendingSet = workout.orderedSets().firstOrNull { it.id == progress.currentSetId }
+        val countdownEntry = entries.firstOrNull { entry -> entry.sets.any { it.id == countdownSetId } }
+        val countdownSet = countdownEntry?.sets?.firstOrNull { it.id == countdownSetId }
+        if (countdownEntry != null && countdownSet != null && countdownSet.completedAt == null && !progress.isPaused)
+            key(countdownSet.id) {
+                SetStartCountdownDialog(countdownEntry.exercise.name, countdownSet.position + 1, action,
+                    onCancel = { countdownSetId = null; model.clearError() },
+                    onStart = { model.startNextSet(workout.workout.id, countdownSet.id) })
+            }
+        val plannedEntry = entries.firstOrNull { it.workoutExercise.id == plannedSetsId }
+        val swapEntry = entries.firstOrNull { it.workoutExercise.id == swapEntryId }
+        if (swapEntry != null) SwapExerciseDialog(swapEntry, state.exercises, action, swapPreview,
+            onDismiss = { swapEntryId = null; model.clearSwapPreview(); model.clearError() },
+            onPreview = model::loadSwapPreview,
+            onSwap = { exerciseId, source, sourceEntryId ->
+                model.swapActiveExercise(workout.workout.id, swapEntry.workoutExercise.id, exerciseId, source, sourceEntryId)
+            })
+        if (plannedEntry != null) ActivePlannedSetsDialog(plannedEntry, action,
+            onCancel = { plannedSetsId = null; model.clearError() }, onEdit = model::clearError,
+            onSave = { model.editActivePlannedSets(workout.workout.id, plannedEntry.workoutExercise.id, it) })
+        if (lastSessionId != null) LastSessionDialog(lastSession, false, null,
+            onClose = { lastSessionId = null; model.clearLastSession() },
+            onRetry = { lastSessionId?.let { model.loadLastSession(workout.workout.id, it) } },
+            onImport = {}, allowImport = false)
         if (progress.awaitingActual && pendingSet != null) ActualRepsDialog(pendingSet, action,
             onSave = { actual, rpe, notes -> model.recordActual(workout.workout.id, pendingSet.id, actual, rpe, notes) },
             onPause = { model.pauseSession(workout.workout.id) }, breakMillis = progress.phaseMillis(now), visible = !progress.isPaused,
@@ -304,16 +345,19 @@ private fun ExerciseProgressStrip(entries: List<ExerciseWithSets>, selectedIndex
 @Composable
 private fun SessionTimers(workout: WorkoutDetails, state: WorkoutSessionState, now: Long, modifier: Modifier, compact: Boolean = false) {
     val current = workout.orderedSets().firstOrNull { it.id == state.currentSetId }
+    val currentSets = workout.exercises.firstOrNull { entry -> entry.sets.any { it.id == state.currentSetId } }?.sets ?: workout.orderedSets()
     val active = if (state.phase == "active") state.phaseMillis(now) else current?.activeMillis ?: 0
     val rest = if (state.phase in listOf("rest", "cooldown")) state.phaseMillis(now) else 0
     Surface(modifier.fillMaxWidth().testTag("session-timers"), shape = PoliceCardShape, color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
         Row(Modifier.padding(if (compact) 10.dp else 14.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
-            if (!compact) ShieldMark(Modifier.size(32.dp))
             Column(Modifier.weight(1f)) {
                 Text("ON DUTY", style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
                 Text(sessionTime(state.dutyMillis(now)), style = StatTypography.copy(fontSize = if (compact) 18.sp else 22.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("duty-time"))
             }
+            Text("${currentSets.count { it.completedAt != null }} / ${currentSets.size} sets",
+                Modifier.weight(1f).testTag("session-set-count"), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = MaterialTheme.typography.labelSmall, color = PoliceColors.LightBlue)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("ACTIVE", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)

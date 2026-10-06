@@ -39,7 +39,7 @@ internal fun FeatureConstructionDialog(title: String, icon: Int, message: String
                 SirenRule(Modifier.fillMaxWidth())
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("$tagPrefix-construction-content"),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Image(painterResource(R.drawable.armory_under_construction),
+                    Image(painterResource(R.drawable.precinct_under_construction),
                         contentDescription = "A sheepish officer in a hard hat repairs a dumbbell behind a tiny construction barrier.",
                         contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().aspectRatio(1.5f)
                             .clip(PoliceCardShape).testTag("$tagPrefix-construction-image"))

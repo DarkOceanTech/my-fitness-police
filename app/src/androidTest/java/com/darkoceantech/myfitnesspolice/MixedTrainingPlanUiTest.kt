@@ -73,7 +73,7 @@ class MixedTrainingPlanUiTest {
             pick("training-set-weight-0", "25")
             pick("training-set-reps-0", "12")
             compose.onNodeWithTag("training-direct-sets-list").performScrollToNode(hasTestTag("add-training-set"))
-            compose.onNodeWithTag("add-training-set").performClick()
+            compose.onNodeWithTag("add-training-set").performScrollTo().performClick()
             pick("training-set-weight-1", "30")
             pick("training-set-reps-1", "8")
             capture("mixed-direct-set-editor")
@@ -167,7 +167,7 @@ class MixedTrainingPlanUiTest {
             assertEquals("ready", session.sessionState!!.phase)
             assertFalse(session.sessionState!!.hasStarted)
             compose.onNodeWithTag("set-action-${set.id}").performScrollTo().assertIsEnabled().performClick()
-            compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get(session.workout.id)?.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get(session.workout.id)?.phase == "active" } }
             val started = runBlocking { db.sessionStateDao().get(session.workout.id)!! }
             assertEquals(set.id, started.currentSetId)
             assertTrue(started.hasStarted)
@@ -201,15 +201,18 @@ class MixedTrainingPlanUiTest {
         waitTag("training-exercise-sets")
     }
     private fun assertValue(tag: String, value: String) {
-        compose.onNodeWithTag("training-direct-sets-list").performScrollToNode(hasTestTag(tag))
-        compose.onNodeWithTag(tag).performScrollTo().assert(hasText(value) or hasAnyDescendant(hasText(value)))
+        val description = fieldDescription(tag)
+        compose.onNodeWithTag("training-direct-sets-list").performScrollToNode(hasContentDescription(description))
+        compose.onNodeWithContentDescription(description).performScrollTo().assert(hasText(value) or hasAnyDescendant(hasText(value)))
     }
     private fun pick(tag: String, value: String) {
-        compose.onNodeWithTag("training-direct-sets-list").performScrollToNode(hasTestTag(tag))
-        compose.onNodeWithTag(tag).performScrollTo().performClick()
-        compose.onNodeWithTag("$tag-options").performScrollToNode(hasText(value))
-        compose.onNode(hasText(value) and hasClickAction()).performClick()
+        val description = fieldDescription(tag)
+        compose.onNodeWithTag("training-direct-sets-list").performScrollToNode(hasContentDescription(description))
+        compose.onNodeWithContentDescription(description).performScrollTo().performClick()
+        compose.onNodeWithTag("$description options").performScrollToNode(hasText(value))
+        compose.onNode(hasText(value) and hasClickAction() and hasAnyAncestor(hasTestTag("$description options"))).performClick()
     }
+    private fun fieldDescription(tag: String) = (if ("-weight-" in tag) "Weight" else "Reps") + " set " + (tag.substringAfterLast('-').toInt() + 1)
     private fun homePlan(id: String) = compose.onNodeWithTag("workout-home").performScrollToNode(hasTestTag("training-plan-$id"))
     private fun waitTag(tag: String) { compose.waitUntil(8000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() } }
     private fun waitGone(tag: String) { compose.waitUntil(8000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty() } }

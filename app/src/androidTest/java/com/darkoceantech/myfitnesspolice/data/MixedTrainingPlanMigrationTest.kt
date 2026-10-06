@@ -47,10 +47,10 @@ class MixedTrainingPlanMigrationTest {
             old.version = 13
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_13_14).build()
+            .addMigrations(FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
         var db = open()
         try {
-            assertEquals(14, db.openHelper.writableDatabase.version)
+            assertEquals(15, db.openHelper.writableDatabase.version)
             val plan = db.trainingPlanDao().get("training")!!
             assertEquals(TrainingPlan(id = "training", name = "Back day", createdAt = 1000, dayOfWeek = "Thursday"), plan.plan)
             assertEquals(listOf(TrainingPlanItem.WorkoutItem("saved")), plan.orderedItems())

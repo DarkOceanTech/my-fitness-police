@@ -55,8 +55,8 @@ fun ExercisesScreen(
     }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (header != null) header()
-        else SectionPageHeader("Armory", location = "Exercises", onBack = onBack,
-            backLabel = "Back to Armory", enabled = !form.saving)
+        else SectionPageHeader("Precinct", location = "Exercises", onBack = onBack,
+            backLabel = "Back to Precinct", enabled = !form.saving)
         LazyColumn(Modifier.weight(1f).testTag("exercise-catalog"), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "search") {
@@ -138,7 +138,7 @@ private fun ExerciseSearch(query: String, onChange: (String) -> Unit, tag: Strin
 
 @Composable
 private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onSelect: (() -> Unit)? = null,
-    onEdit: (() -> Unit)? = null, selected: Boolean = false, selectLabel: String = "Add") {
+    onEdit: (() -> Unit)? = null, selected: Boolean = false, selectLabel: String = "Add", recommended: Boolean = false) {
     var expanded by rememberSaveable(exercise.id) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxWidth().testTag("catalog-exercise-${exercise.id}"), shape = PoliceCardShape,
@@ -162,6 +162,8 @@ private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onS
                     }
                 } else SirenRule(Modifier.width(24.dp))
             }
+            if (recommended) Text("Recommended · related muscle group", modifier = Modifier.testTag("recommended-exercise-${exercise.id}"),
+                color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelMedium)
             Text(exercise.mainMuscleGroup().label.uppercase(java.util.Locale.ROOT),
                 color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
             ExerciseDetailField("EQUIPMENT", exercise.equipment.ifBlank { "Not specified" })
@@ -303,7 +305,8 @@ internal fun ExercisePickerDialog(exercises: List<Exercise>, saving: Boolean, er
     onDismiss: () -> Unit, onSelect: (String) -> Unit,
     selectedExerciseIds: Set<String> = emptySet(), onRemove: ((String) -> Unit)? = null,
     title: String = "Add Exercise", selectLabel: String = "Add", backLabel: String = "Back to workout",
-    allowCreate: Boolean = true) {
+    allowCreate: Boolean = true, recommendedExerciseIds: List<String> = emptyList(),
+    intro: (@Composable () -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var showForm by rememberSaveable { mutableStateOf(false) }
     var selectedNames by rememberSaveable { mutableStateOf(MuscleGroup.entries.map { it.name }) }
@@ -311,10 +314,11 @@ internal fun ExercisePickerDialog(exercises: List<Exercise>, saving: Boolean, er
     val multiple = onRemove != null
     val selected = selectedMuscleGroups(selectedNames)
     val groups = remember(exercises) { availableMuscleGroups(exercises) }
-    val matches = remember(exercises, query, selected, onlySelected, selectedExerciseIds, multiple) {
+    val matches = remember(exercises, query, selected, onlySelected, selectedExerciseIds, multiple, recommendedExerciseIds) {
         filterExercises(filterByMuscleGroups(exercises, selected), query).filter {
             !multiple || !onlySelected || it.id in selectedExerciseIds
-        }
+        }.sortedWith(compareBy<Exercise> { recommendedExerciseIds.indexOf(it.id).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE }
+            .thenBy { it.name.lowercase(java.util.Locale.ROOT) })
     }
     LaunchedEffect(form.saved) {
         if (showForm && form.saved) {
@@ -338,6 +342,7 @@ internal fun ExercisePickerDialog(exercises: List<Exercise>, saving: Boolean, er
         }
         LazyColumn(Modifier.weight(1f).testTag("exercise-picker-list"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (intro != null) item(key = "intro") { intro() }
             if (multiple) item(key = "selection") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     FilterChip(selected = onlySelected, onClick = {
@@ -371,6 +376,7 @@ internal fun ExercisePickerDialog(exercises: List<Exercise>, saving: Boolean, er
             items(matches, key = { it.id }) { exercise ->
                 val included = multiple && exercise.id in selectedExerciseIds
                 ExerciseCatalogCard(exercise, enabled = !saving, selected = included, selectLabel = selectLabel,
+                    recommended = exercise.id in recommendedExerciseIds,
                     onSelect = { if (included) onRemove?.invoke(exercise.id) else onSelect(exercise.id) })
             }
         }

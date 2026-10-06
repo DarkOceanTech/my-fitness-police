@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.darkoceantech.myfitnesspolice.data.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -16,17 +17,40 @@ data class SessionState(
     val sessions: List<WorkoutDetails> = emptyList(),
     val exercises: List<Exercise> = emptyList(),
     val trainingPlans: List<TrainingPlanDetails> = emptyList(),
+    val trainingSchedule: List<TrainingSchedule> = emptyList(),
 )
 
 data class SessionAction(val saving: Boolean = false, val error: String? = null, val revision: Int = 0,
     val completedAction: String? = null)
 
+data class LastSessionState(val loading: Boolean = false, val snapshot: ExerciseSessionSnapshot? = null,
+    val error: String? = null, val history: List<ExerciseSessionSnapshot> = emptyList())
+
 class SessionViewModel(private val repository: FitnessRepository) : ViewModel() {
+    private val _swapPreview = MutableStateFlow(LastSessionState())
+    val swapPreview = _swapPreview.asStateFlow()
+    private var swapPreviewJob: Job? = null
+    fun loadSwapPreview(exerciseId: String) {
+        swapPreviewJob?.cancel()
+        _swapPreview.value = LastSessionState(loading = true)
+        swapPreviewJob = viewModelScope.launch {
+            try { _swapPreview.value = LastSessionState(snapshot = repository.activeExerciseSwap.preview(exerciseId),
+                history = repository.getExerciseSessionHistory(exerciseId)) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _swapPreview.value = LastSessionState(error = "Could not load the last session. Please retry.") }
+        }
+    }
+    fun clearSwapPreview() {
+        swapPreviewJob?.cancel(); swapPreviewJob = null
+        _swapPreview.value = LastSessionState()
+    }
+    fun swapActiveExercise(workout: String, entry: String, exercise: String, source: SwapSetSource, sourceEntryId: String?) =
+        perform("swap-active-exercise") { repository.activeExerciseSwap.swap(workout, entry, exercise, source, sourceEntryId) }
     private val refresh = MutableStateFlow(0)
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val state = refresh.flatMapLatest {
-        combine(repository.observeSessions(), repository.observeExercises(), repository.trainingPlans.observeAll()) { sessions, exercises, plans ->
-            SessionState(loading = false, sessions = sessions, exercises = exercises, trainingPlans = plans)
+        combine(repository.observeSessions(), repository.observeExercises(), repository.trainingPlans.observeAll(), repository.trainingSchedule.observeAll()) { sessions, exercises, plans, schedule ->
+            SessionState(loading = false, sessions = sessions, exercises = exercises, trainingPlans = plans, trainingSchedule = schedule)
         }.catch { emit(SessionState(loading = false, failed = true)) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionState())
     // Collected by Home only. Room updates refresh totals; ticking keeps live activity and week rollover accurate.
@@ -38,6 +62,31 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
 
     private val _action = MutableStateFlow(SessionAction())
     val action = _action.asStateFlow()
+    private val _lastSession = MutableStateFlow(LastSessionState())
+    val lastSession = _lastSession.asStateFlow()
+    private var lastSessionJob: Job? = null
+    fun loadLastSession(workoutId: String, entryId: String) {
+        lastSessionJob?.cancel()
+        _lastSession.value = LastSessionState(loading = true)
+        lastSessionJob = viewModelScope.launch {
+            try {
+                val snapshot = repository.getLastSession(workoutId, entryId)
+                _lastSession.value = LastSessionState(snapshot = snapshot,
+                    history = repository.getExerciseSessionHistory(snapshot.entry.exercise.id))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IllegalArgumentException) {
+                _lastSession.value = LastSessionState(error = e.message ?: "No session was found for this exercise.")
+            } catch (_: Exception) {
+                _lastSession.value = LastSessionState(error = "Could not load the last session. Please retry.")
+            }
+        }
+    }
+    fun clearLastSession() {
+        lastSessionJob?.cancel()
+        lastSessionJob = null
+        _lastSession.value = LastSessionState()
+    }
     private val _automaticallyFinishedWorkout = MutableStateFlow<String?>(null)
     val automaticallyFinishedWorkout = _automaticallyFinishedWorkout.asStateFlow()
     private var autoFinishDeferred = false
@@ -95,6 +144,8 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     fun cancelUnstartedSession(workout: String) = perform("cancel-session") { repository.sessionProgress.cancelUnstartedSession(workout) }
     fun startNextSet(workout: String, set: String) =
         perform("start-next-set") { repository.sessionProgress.startSet(workout, set) }
+    fun editActivePlannedSets(workout: String, entry: String, changes: List<PlannedSetUpdate>) =
+        perform("edit-active-planned-sets") { repository.editActivePlannedSets(workout, entry, changes) }
     fun endRest(workout: String) = perform("end-rest") { repository.sessionProgress.endRest(workout) }
     fun pauseSession(workout: String) = perform("pause-session") { repository.sessionProgress.pause(workout) }
     fun savePauseReason(workout: String, note: String) =
@@ -119,6 +170,8 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     fun saveTrainingPlanItems(id: String?, name: String, items: List<TrainingPlanItem>, day: String) =
         perform("save-training-plan") { repository.trainingPlans.saveItems(id, name, items, day) }
     fun startTraining(id: String) = perform("start-training") { repository.startTraining(id) }
+    fun scheduleTraining(id: String, dates: List<String>) = perform("schedule-training") { repository.trainingSchedule.saveDates(id, dates) }
+    fun deleteScheduledTraining(id: String, date: String) = perform("delete-scheduled-training") { repository.trainingSchedule.deleteDate(id, date) }
     fun deleteTrainingPlan(id: String) = perform("delete-training-plan") { repository.trainingPlans.delete(id) }
     fun startPlan(id: String) = perform("start-plan") { repository.startPlan(id) }
     fun clearDraft() = perform("clear-draft") { repository.clearDraft() }
@@ -126,6 +179,8 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
         perform("save-metadata") { repository.saveWorkoutDetails(id, name, muscles, day, plans) }
     fun reorderExercises(id: String, entries: List<String>) =
         perform("reorder-exercises") { repository.reorderExercises(id, entries) }
+    fun reorderSets(workout: String, entry: String, sets: List<String>) =
+        perform("reorder-sets") { repository.reorderSets(workout, entry, sets) }
     fun removeExercise(workout: String, entry: String) =
         perform("remove-exercise") { repository.removeWorkoutExercise(workout, entry) }
     fun saveEquipmentPositions(workout: String, entry: String, positions: List<EquipmentPosition>) =
@@ -133,6 +188,8 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     fun chooseExercise(id: String, planId: String? = null) = perform("choose-exercise") { repository.chooseExercise(id, planId) }
     fun addDefaultSet(workout: String, entry: String) = perform { repository.saveSet(workout, entry, null, 10, 0) }
     fun copyLastSet(workout: String, entry: String) = perform { repository.copyLastSet(workout, entry) }
+    fun importLastSession(workout: String, entry: String, sourceEntryId: String? = null) =
+        perform("import-last-session") { repository.importLastSession(workout, entry, sourceEntryId) }
     fun sessionNote(workout: String, entry: String, value: String) = perform("session-note") { repository.updateExerciseNote(workout, entry, value) }
     fun note(workout: String, entry: String, value: String) = perform { repository.updateExerciseNote(workout, entry, value) }
     fun changeSet(workout: String, entry: String, set: String, field: String, value: String) = perform {
@@ -152,6 +209,9 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
         perform("replace-history-exercise") { repository.replaceHistoryExercise(workoutId, entryId, newExerciseId) }
     fun saveHistorySetNote(workout: String, set: String, notes: String) = perform("save-history-set-note") {
         repository.saveHistorySetNote(workout, set, notes)
+    }
+    fun saveHistoryExerciseNote(workout: String, entry: String, notes: String) = perform("save-history-exercise-note") {
+        repository.saveHistoryExerciseNote(workout, entry, notes)
     }
     fun saveActiveSetNote(workout: String, set: String, notes: String) = perform("save-active-set-note") {
         repository.saveActiveSetNote(workout, set, notes)

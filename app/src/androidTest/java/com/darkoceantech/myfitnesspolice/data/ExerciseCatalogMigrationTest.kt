@@ -38,7 +38,7 @@ class ExerciseCatalogMigrationTest {
             old.version = 6
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name)
-            .addMigrations(FitnessDatabase.MIGRATION_6_7, FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14).addCallback(SeedExercises).build()
+            .addMigrations(FitnessDatabase.MIGRATION_6_7, FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).addCallback(SeedExercises).build()
         var db = open()
         try {
             val catalog = db.exerciseDao().getAll()

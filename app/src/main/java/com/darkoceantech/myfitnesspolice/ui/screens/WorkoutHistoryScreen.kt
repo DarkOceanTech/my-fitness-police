@@ -27,7 +27,8 @@ import java.util.Date
 
 @Composable
 fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect: (String?) -> Unit,
-    modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
+    modifier: Modifier = Modifier, onBack: (() -> Unit)? = null,
+    selectedBackLabel: String? = null, onSelectedBack: (() -> Unit)? = null) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
     val completed = state.sessions.filter { it.workout.kind == "session" && it.workout.finishedAt != null }
@@ -41,6 +42,7 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
     var grouping by rememberSaveable { mutableStateOf(false) }
     var infoId by rememberSaveable(selectedId) { mutableStateOf<String?>(null) }
     var replacingEntryId by rememberSaveable(selectedId) { mutableStateOf<String?>(null) }
+    var noteEntryId by rememberSaveable(selectedId) { mutableStateOf<String?>(null) }
     var collapsedEntryIds by rememberSaveable(selectedId) { mutableStateOf(emptyList<String>()) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
     var dateWindowName by rememberSaveable { mutableStateOf(HistoryDateWindow.AllTime.name) }
@@ -59,9 +61,10 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
     var revision by rememberSaveable { mutableIntStateOf(action.revision) }
     fun back() {
         when {
+            noteEntryId != null -> { noteEntryId = null; model.clearError() }
             replacingEntryId != null -> { replacingEntryId = null; model.clearError() }
             infoId != null -> infoId = null
-            selectedId != null -> onSelect(null)
+            selectedId != null -> if (onSelectedBack != null) onSelectedBack() else onSelect(null)
             else -> onBack?.invoke()
         }
     }
@@ -71,8 +74,9 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
             when (action.completedAction) {
                 "rename-history-workout" -> renaming = false
                 "replace-history-exercise" -> replacingEntryId = null
+                "save-history-exercise-note" -> noteEntryId = null
                 "delete-all-history", "delete-history-workout" -> {
-                    deletingAll = false; deletingWorkoutId = null; choosingDeletion = false; infoId = null; onSelect(null)
+                    deletingAll = false; deletingWorkoutId = null; choosingDeletion = false; infoId = null; noteEntryId = null; onSelect(null)
                 }
             }
             revision = action.revision
@@ -85,7 +89,7 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
         SectionPageHeader("Progress Reports",
             location = if (selectedId == null) "Workout Log" else "Workout Log / ${selectedGroup?.title ?: "Workout"}",
             onBack = if (selectedId != null || onBack != null) ({ back() }) else null,
-            backLabel = if (infoId != null) "Close set info" else if (selectedId != null) "Back to Workout Log" else "Back to Reports",
+            backLabel = if (infoId != null) "Close set info" else if (selectedId != null) selectedBackLabel ?: "Back to Workout Log" else "Back to Reports",
             enabled = !action.saving) {
             Box {
                 IconButton(onClick = { menu = true }, enabled = !action.saving,
@@ -149,6 +153,7 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
                         Text(item.workout.workout.displayName(), style = MaterialTheme.typography.titleSmall, color = PoliceColors.LightBlue)
                     }
                     ActiveExerciseCard(entry, item.workout, item.workout.sessionState, !action.saving,
+                        onNote = { model.clearError(); noteEntryId = entry.workoutExercise.id },
                         onInfo = { model.clearError(); infoId = it },
                         historyCollapsed = entry.workoutExercise.id in collapsedEntryIds,
                         onToggleHistoryCollapse = { collapsedEntryIds = if (entry.workoutExercise.id in collapsedEntryIds)
@@ -199,7 +204,13 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
                 }
             }
         }
-        if (action.error != null && infoId == null && replacingEntryId == null && !deletingAll && deletingWorkoutId == null && !renaming && !grouping) Text(action.error!!, Modifier.padding(16.dp), color = PoliceColors.Error)
+        if (action.error != null && infoId == null && replacingEntryId == null && noteEntryId == null && !deletingAll && deletingWorkoutId == null && !renaming && !grouping) Text(action.error!!, Modifier.padding(16.dp), color = PoliceColors.Error)
+    }
+    val noteOwner = selectedGroup?.exercises?.find { it.entry.workoutExercise.id == noteEntryId }
+    if (noteOwner != null) key(noteOwner.entry.workoutExercise.id) {
+        HistoryExerciseNoteDialog(noteOwner.entry.exercise.name, noteOwner.entry.workoutExercise.notes, action,
+            onDismiss = { noteEntryId = null; model.clearError() }, onEdit = model::clearError,
+            onSave = { model.saveHistoryExerciseNote(noteOwner.workout.workout.id, noteOwner.entry.workoutExercise.id, it) })
     }
     if (grouping) HistoryPlanGroupingDialog(model, onDismiss = { grouping = false },
         initialSelectedIds = selectedGroup?.workouts?.map { it.workout.id }?.toSet().orEmpty())

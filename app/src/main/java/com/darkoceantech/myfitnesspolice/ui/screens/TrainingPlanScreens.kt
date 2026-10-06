@@ -35,7 +35,6 @@ internal fun TrainingPlanCard(details: TrainingPlanDetails, library: List<Workou
                 SirenRule(Modifier.width(36.dp))
             }
             Text(details.plan.name, style = MaterialTheme.typography.headlineSmall)
-            Text(details.plan.dayOfWeek.ifBlank { "Not scheduled" }, style = MaterialTheme.typography.labelMedium, color = PoliceColors.LightBlue)
             Text("${entries.sumOf { it.sets }} sets · ${entries.sumOf { it.reps }} reps", color = PoliceColors.Muted)
             HorizontalDivider(color = PoliceColors.Border)
             Text(entries.joinToString(" → ") { it.title }.ifBlank { "Add workouts or exercises to this plan" },
@@ -49,7 +48,6 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
     modifier: Modifier = Modifier, onBack: () -> Unit, onSaved: () -> Unit, onWorkouts: () -> Unit,
     onSave: (String?, String, List<TrainingPlanItem>, String) -> Unit, exercises: List<Exercise> = emptyList()) {
     var name by rememberSaveable(existing?.plan?.id) { mutableStateOf(existing?.plan?.name.orEmpty()) }
-    var day by rememberSaveable(existing?.plan?.id) { mutableStateOf(existing?.plan?.dayOfWeek.orEmpty()) }
     var includedItems by rememberSaveable(existing?.plan?.id, stateSaver = TrainingItemsSaver) { mutableStateOf(existing?.orderedItems().orEmpty()) }
     var excludedSource by rememberSaveable { mutableStateOf("Workouts") }
     var editingExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -93,7 +91,8 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
         TrainingHeader(if (existing == null) "Training Plan" else "Edit Training Plan", !action.saving, onBack) {
             PoliceButton(onClick = {
                 requestedSave = true
-                onSave(existing?.plan?.id, name, includedItems, day)
+                // Scheduling belongs to calendar appointments; preserve legacy metadata on existing plans.
+                onSave(existing?.plan?.id, name, includedItems, existing?.plan?.dayOfWeek.orEmpty())
             }, enabled = !action.saving && name.isNotBlank() && included.isNotEmpty(),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 modifier = Modifier.heightIn(min = 48.dp).testTag("save-training-plan")) {
@@ -105,7 +104,6 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(name, { name = it }, label = { Text("Plan name") }, placeholder = { Text("Back + Arms + Abs") },
                 singleLine = true, enabled = !action.saving, modifier = Modifier.weight(1f).testTag("training-plan-name"))
-            TrainingDayField(day, !action.saving, Modifier.width(IntrinsicSize.Max).widthIn(min = 96.dp)) { day = it }
         }
         Text("Tap to select. Hold to move workouts or exercises between lists.", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
     }
@@ -170,7 +168,9 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
         }
     }
     val editing = includedItems.filterIsInstance<TrainingPlanItem.ExerciseItem>().find { it.exerciseId == editingExerciseId }
-    if (editing != null) TrainingExerciseSetsDialog(editing, included.first { it.key == editing.key }.title,
+    if (editing != null) TrainingExerciseSetsDialog(editing, name.ifBlank { "New training plan" },
+        existing?.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
+            ?: Exercise(editing.exerciseId, included.first { it.key == editing.key }.title, ""),
         saving = false, error = null, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets) else it }
             editingExerciseId = null
@@ -184,33 +184,6 @@ private fun TrainingReorderButton(symbol: String, description: String, tag: Stri
             .border(1.dp, if (enabled) PoliceColors.LightBlue else PoliceColors.Border, RoundedCornerShape(10.dp))
             .semantics { contentDescription = description }) {
         Text(symbol, fontSize = 24.sp, color = if (enabled) PoliceColors.LightBlue else PoliceColors.Muted.copy(alpha = .45f))
-    }
-}
-
-@Composable
-private fun TrainingDayField(day: String, enabled: Boolean, modifier: Modifier = Modifier, onSelect: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Day of Week", style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
-        Box {
-            OutlinedButton(onClick = { expanded = true }, enabled = enabled,
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("training-plan-day")) {
-                Text(if (day.isBlank()) "—" else day.take(3), Modifier.weight(1f), maxLines = 1); Text("⌄")
-            }
-            DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                (listOf("Not scheduled") + trainingWeekdays).forEach { option ->
-                    DropdownMenuItem(text = {
-                        Row(Modifier.widthIn(min = 208.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (option == "Not scheduled") "—" else option.take(3), Modifier.width(40.dp),
-                                style = MaterialTheme.typography.labelLarge, color = PoliceColors.LightBlue)
-                            Text(option, Modifier.weight(1f))
-                        }
-                    }, onClick = { onSelect(if (option == "Not scheduled") "" else option); expanded = false })
-                }
-            }
-        }
     }
 }
 
@@ -293,72 +266,101 @@ private fun TrainingHeader(title: String, enabled: Boolean, onBack: () -> Unit,
 @Composable
 internal fun TrainingPlanDetailScreen(details: TrainingPlanDetails, library: List<WorkoutDetails>, action: SessionAction,
     modifier: Modifier = Modifier, onBack: () -> Unit, onEdit: () -> Unit, onStart: () -> Unit, onWorkout: (String) -> Unit, onDelete: () -> Unit,
-    hasActiveSession: Boolean = false, exercises: List<Exercise> = emptyList(), onSaveItems: (List<TrainingPlanItem>) -> Unit = {}) {
+    hasActiveSession: Boolean = false, exercises: List<Exercise> = emptyList(), onSaveItems: (List<TrainingPlanItem>) -> Unit = {},
+    fromLaunchpad: Boolean = false, scheduledDates: List<String> = emptyList(), onSchedule: (List<String>) -> Unit = {},
+    selectedScheduleDate: String? = null, onDeleteSchedule: (String) -> Unit = {}) {
     val entries = trainingItemUi(details.orderedItems(), library, exercises, details)
     var deleting by rememberSaveable(details.plan.id) { mutableStateOf(false) }
     var options by remember(details.plan.id) { mutableStateOf(false) }
     var editingExerciseId by rememberSaveable(details.plan.id) { mutableStateOf<String?>(null) }
     var requestedSave by rememberSaveable(details.plan.id) { mutableStateOf(false) }
+    var scheduling by rememberSaveable(details.plan.id) { mutableStateOf(false) }
+    var deletingSchedule by rememberSaveable(details.plan.id) { mutableStateOf(false) }
     var revision by rememberSaveable { mutableIntStateOf(action.revision) }
     LaunchedEffect(action.revision) {
         if (revision != action.revision) {
             if (requestedSave && action.completedAction == "save-training-plan") { requestedSave = false; editingExerciseId = null }
+            if (action.completedAction == "delete-scheduled-training") deletingSchedule = false
             revision = action.revision
         }
     }
+    val totals: @Composable () -> Unit = {
+        Text("${trainingItemCount(entries)} · ${entries.sumOf { it.sets }} sets · ${entries.sumOf { it.reps }} reps",
+            style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+    }
+    val planList: @Composable (Modifier) -> Unit = { listModifier ->
+        LazyColumn(listModifier.testTag("training-plan-workouts"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (entries.isEmpty()) item { Text("This plan has no workouts or exercises. Edit the plan to include one.") }
+            items(entries, key = { it.key }) { entry ->
+                Surface(Modifier.fillMaxWidth().testTag(entry.tag("training"))
+                    .clickable(enabled = !action.saving) {
+                        if (entry.isExercise) editingExerciseId = entry.id else onWorkout(entry.id)
+                    }, color = PoliceColors.Card, shape = PoliceCardShape, border = BorderStroke(1.dp, PoliceColors.Border)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("${entries.indexOf(entry) + 1}", color = PoliceColors.LightBlue)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("${entry.sets} sets · ${entry.reps} reps", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+                            Text(entry.kind, style = MaterialTheme.typography.labelSmall, color = PoliceColors.LightBlue)
+                        }
+                        Text(if (entry.isExercise) "✎" else "→", color = PoliceColors.LightBlue)
+                    }
+                }
+            }
+        }
+    }
+    val controls: @Composable () -> Unit = {
+        if (hasActiveSession) Text("You already have a workout in progress. Return to it before starting another.",
+            style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+        PoliceButton(onClick = onStart, enabled = !hasActiveSession && !action.saving && entries.isNotEmpty() && entries.all { it.sets > 0 },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("start-training")) { Text("Start training!") }
+        PoliceOutlinedButton(onClick = { scheduling = true }, enabled = !action.saving,
+            modifier = Modifier.fillMaxWidth().testTag("schedule-training")) { Text("Schedule training") }
+        if (scheduledDates.isNotEmpty()) Text("${scheduledDates.size} saved calendar date${if (scheduledDates.size == 1) "" else "s"}",
+            color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+        action.error?.let { Text(it, color = PoliceColors.Error) }
+    }
     Column(modifier.fillMaxSize().testTag("training-plan-detail")) {
-        SectionPageHeader(details.plan.name, onBack = onBack, backLabel = "Back to Plan", enabled = !action.saving) {
+        SectionPageHeader(details.plan.name, onBack = onBack, backLabel = if (fromLaunchpad) "Back to Launchpad" else "Back to Plan", enabled = !action.saving) {
             Box {
                 IconButton(onClick = { options = true }, enabled = !action.saving,
                     modifier = Modifier.semantics { contentDescription = "Training plan options" }) { Text("⋮", fontSize = 26.sp) }
                 DropdownMenu(options, onDismissRequest = { options = false }) {
                     DropdownMenuItem(text = { Text("Edit plan") }, enabled = !action.saving,
                         modifier = Modifier.testTag("edit-training-plan"), onClick = { options = false; onEdit() })
+                    if (scheduledDates.isNotEmpty()) DropdownMenuItem(text = { Text("Delete scheduled training", color = PoliceColors.Error) },
+                        enabled = !action.saving, modifier = Modifier.testTag("delete-scheduled-training"),
+                        onClick = { options = false; deletingSchedule = true })
                     DropdownMenuItem(text = { Text("Delete training plan", color = PoliceColors.Error) }, enabled = !action.saving,
                         modifier = Modifier.testTag("delete-training-plan"), onClick = { options = false; deleting = true })
                 }
             }
         }
-        Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("${trainingItemCount(entries)} · ${entries.sumOf { it.sets }} sets · ${entries.sumOf { it.reps }} reps",
-                style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
-            Text("Day of Week · ${details.plan.dayOfWeek.ifBlank { "Not scheduled" }}",
-                style = MaterialTheme.typography.bodyMedium, color = PoliceColors.LightBlue, modifier = Modifier.testTag("training-plan-schedule"))
-            LazyColumn(Modifier.weight(1f).testTag("training-plan-workouts"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (entries.isEmpty()) item { Text("This plan has no workouts or exercises. Edit the plan to include one.") }
-                items(entries, key = { it.key }) { entry ->
-                    Surface(Modifier.fillMaxWidth().testTag(entry.tag("training"))
-                        .clickable(enabled = !action.saving) {
-                            if (entry.isExercise) editingExerciseId = entry.id else onWorkout(entry.id)
-                        },
-                        color = PoliceColors.Card, shape = PoliceCardShape, border = BorderStroke(1.dp, PoliceColors.Border)) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("${entries.indexOf(entry) + 1}", color = PoliceColors.LightBlue)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text("${entry.sets} sets · ${entry.reps} reps", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
-                                Text(entry.kind, style = MaterialTheme.typography.labelSmall, color = PoliceColors.LightBlue)
-                            }
-                            Text(if (entry.isExercise) "✎" else "→", color = PoliceColors.LightBlue)
-                        }
-                    }
-                }
+        if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Row(Modifier.weight(1f).fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.width(260.dp).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)) { totals(); controls() }
+                VerticalDivider(color = PoliceColors.Border)
+                planList(Modifier.weight(1f).fillMaxHeight())
             }
-            if (hasActiveSession) {
-                Text("You already have a workout in progress. Return to it before starting another.",
-                    style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
-            }
-            PoliceButton(onClick = onStart, enabled = !hasActiveSession && !action.saving && entries.isNotEmpty() && entries.all { it.sets > 0 },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("start-training")) { Text("Start training!") }
-            action.error?.let { Text(it, color = PoliceColors.Error) }
+        } else Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            totals()
+            planList(Modifier.weight(1f))
+            controls()
         }
     }
+    if (scheduling) TrainingScheduleDialog(details.plan.id, details.plan.name, scheduledDates, action,
+        onDismiss = { scheduling = false }, onSave = onSchedule)
+    if (deletingSchedule) DeleteTrainingScheduleDialog(details.plan.name, scheduledDates, selectedScheduleDate, action,
+        onCancel = { deletingSchedule = false }, onDelete = onDeleteSchedule)
     if (deleting) AlertDialog(onDismissRequest = { if (!action.saving) deleting = false },
         title = { Text("Delete training plan?") }, text = { Text("Delete ${details.plan.name}? Your saved workouts and Workout Log will remain available.") },
         confirmButton = { TextButton(onClick = onDelete, enabled = !action.saving) { Text("Delete", color = PoliceColors.Error) } },
         dismissButton = { TextButton(onClick = { deleting = false }, enabled = !action.saving) { Text("Cancel") } })
     val editing = details.orderedItems().filterIsInstance<TrainingPlanItem.ExerciseItem>().find { it.exerciseId == editingExerciseId }
-    if (editing != null) TrainingExerciseSetsDialog(editing, entries.first { it.key == editing.key }.title,
+    if (editing != null) TrainingExerciseSetsDialog(editing, details.plan.name,
+        details.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
+            ?: Exercise(editing.exerciseId, entries.first { it.key == editing.key }.title, ""),
         saving = action.saving, error = action.error, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             requestedSave = true
             onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets) else it })

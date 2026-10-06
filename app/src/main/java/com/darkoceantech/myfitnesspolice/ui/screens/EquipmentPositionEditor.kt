@@ -41,7 +41,7 @@ internal fun EquipmentPositionEditor(entry: ExerciseWithSets, action: SessionAct
         positions = positions.toMutableList().apply { this[index] = item }
         onEdit()
     }
-    WorkoutEditorDialog("Equipment setup", "equipment-position-editor", !action.saving, onDismiss, footer = {
+    WorkoutEditorDialog("Equipment setup", "equipment-position-editor", !action.saving, onDismiss, fullScreen = true, footer = {
         OutlinedButton(onClick = onDismiss, enabled = !action.saving, modifier = Modifier.weight(1f)) { Text("Cancel") }
         PoliceButton(onClick = { onSave(positions) }, enabled = !action.saving,
             modifier = Modifier.weight(1f).testTag("save-equipment-positions")) { Text(if (action.saving) "Saving…" else "Save") }

@@ -35,7 +35,9 @@ private enum class GymSection(val title: String, val testTag: String) {
 
 @Composable
 fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel, modifier: Modifier = Modifier,
-    onFinished: (String) -> Unit = {}, trainingVisible: Boolean? = null, onTrainingVisibleChange: (Boolean) -> Unit = {}) {
+    onFinished: (String) -> Unit = {}, trainingVisible: Boolean? = null, onTrainingVisibleChange: (Boolean) -> Unit = {},
+    requestedPlanId: String? = null, onPlanRequestHandled: () -> Unit = {}, onReturnToLaunchpad: () -> Unit = {},
+    requestedScheduleDate: String? = null) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
     var savedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -47,6 +49,17 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     var trainingPlanId by rememberSaveable { mutableStateOf<String?>(null) }
     var trainingEditor by rememberSaveable { mutableStateOf(false) }
     var requestedStart by rememberSaveable { mutableStateOf(false) }
+    var fromLaunchpad by rememberSaveable { mutableStateOf(false) }
+    var launchScheduleDate by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(requestedPlanId) {
+        requestedPlanId?.let {
+            trainingPlanId = it; section = GymSection.Plan; showTraining(false)
+            savedId = null; logger = false; trainingEditor = false
+            fromLaunchpad = true
+            launchScheduleDate = requestedScheduleDate
+            onPlanRequestHandled()
+        }
+    }
     fun back() {
         if (action.saving) return
         model.clearError()
@@ -55,7 +68,7 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
             savedId != null -> savedId = null
             logger -> logger = false
             trainingEditor -> trainingEditor = false
-            else -> trainingPlanId = null
+            else -> { trainingPlanId = null; if (fromLaunchpad) { fromLaunchpad = false; onReturnToLaunchpad() } }
         }
     }
     BackHandler(logger || savedId != null || training || trainingEditor || trainingPlanId != null) { back() }
@@ -63,7 +76,10 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
         if (requestedStart && action.completedAction == "start-training") {
             requestedStart = false; showTraining(true)
         }
-        if (action.completedAction == "delete-training-plan") { trainingEditor = false; trainingPlanId = null }
+        if (action.completedAction == "delete-training-plan") {
+            trainingEditor = false; trainingPlanId = null
+            if (fromLaunchpad) { fromLaunchpad = false; onReturnToLaunchpad() }
+        }
     }
     val selectedTraining = state.trainingPlans.firstOrNull { it.plan.id == trainingPlanId }
     val activeSession = state.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null }
@@ -76,7 +92,7 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     else if (logger) WorkoutBuilderScreen(model, exercisesModel, modifier, onBack = { back() }, onSaved = { logger = false })
     else if ((trainingEditor || trainingPlanId != null) && (state.loading || state.failed || (trainingPlanId != null && selectedTraining == null))) {
         Column(modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(onClick = { trainingEditor = false; trainingPlanId = null }) { Text("Back to Plan") }
+            TextButton(onClick = { trainingEditor = false; back() }) { Text(if (fromLaunchpad) "Back to Launchpad" else "Back to Plan") }
             if (state.loading) CircularProgressIndicator()
             else if (state.failed) { Text("Could not load training plans."); TextButton(onClick = model::retry) { Text("Retry") } }
             else Text("This training plan is no longer available.")
@@ -91,6 +107,11 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
         onBack = { back() }, onEdit = { model.clearError(); trainingEditor = true },
         onStart = { model.clearError(); requestedStart = true; model.startTraining(selectedTraining.plan.id) },
         onWorkout = { model.clearError(); savedId = it }, onDelete = { model.deleteTrainingPlan(selectedTraining.plan.id) },
+        fromLaunchpad = fromLaunchpad,
+        scheduledDates = state.trainingSchedule.filter { it.trainingPlanId == selectedTraining.plan.id }.map { it.scheduledDate },
+        onSchedule = { model.scheduleTraining(selectedTraining.plan.id, it) },
+        selectedScheduleDate = launchScheduleDate.takeIf { fromLaunchpad },
+        onDeleteSchedule = { model.deleteScheduledTraining(selectedTraining.plan.id, it) },
         exercises = state.exercises, onSaveItems = { items ->
             model.saveTrainingPlanItems(selectedTraining.plan.id, selectedTraining.plan.name, items, selectedTraining.plan.dayOfWeek)
         })
@@ -106,8 +127,8 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     } else {
         WorkoutHomeScreen(modifier, onAddWorkout = { logger = true },
         section = section, onSection = { section = it }, trainingPlans = state.trainingPlans,
-        onAddTraining = { model.clearError(); trainingPlanId = null; trainingEditor = true },
-        onTrainingPlan = { model.clearError(); trainingPlanId = it },
+        onAddTraining = { model.clearError(); fromLaunchpad = false; trainingPlanId = null; trainingEditor = true },
+        onTrainingPlan = { model.clearError(); fromLaunchpad = false; trainingPlanId = it },
         loading = state.loading, failed = state.failed, onRetry = model::retry,
         saved = state.sessions.filter { it.workout.kind == "plan" }, exercises = state.exercises, onSavedWorkout = { savedId = it })
     }

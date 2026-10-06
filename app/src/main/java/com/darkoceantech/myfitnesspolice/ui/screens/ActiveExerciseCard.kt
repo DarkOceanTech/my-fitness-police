@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.formatting.*
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +30,10 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
     onEquipment: (() -> Unit)? = null,
     onComplete: (String) -> Unit = {}, onStart: (String) -> Unit = {}, onInfo: (String) -> Unit,
     historyCollapsed: Boolean = false, onToggleHistoryCollapse: (() -> Unit)? = null,
-    onChangeExercise: (() -> Unit)? = null) {
+    onChangeExercise: (() -> Unit)? = null, onViewLastSession: (() -> Unit)? = null,
+    onEditPlannedSets: (() -> Unit)? = null, onSwapExercise: (() -> Unit)? = null,
+    showHistoryHeader: Boolean = true, historyMenuInBody: Boolean = false,
+    showHistoryExerciseLabel: Boolean = true) {
     val history = workout.workout.finishedAt != null
     val sets = entry.sets.sortedBy { it.position }.filter { !history || it.completedAt != null }
     val currentInCard = !history && sets.any { it.id == progress?.currentSetId }
@@ -43,8 +48,22 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("View exercise info") }, enabled = enabled,
                     onClick = { menu = false; showInfo = true })
+                if (onViewLastSession != null) DropdownMenuItem(text = { Text("View last session") }, enabled = enabled,
+                    modifier = Modifier.testTag("active-view-last-session-${entry.workoutExercise.id}"),
+                    onClick = { menu = false; onViewLastSession() })
+                if (!history && onSwapExercise != null) DropdownMenuItem(text = { Text("Swap exercise") },
+                    enabled = enabled && !entry.hasStartedInSession(progress),
+                    modifier = Modifier.testTag("swap-exercise-${entry.workoutExercise.id}"),
+                    onClick = { menu = false; onSwapExercise() })
+                if (onEditPlannedSets != null) DropdownMenuItem(text = { Text("Edit planned sets") },
+                    enabled = enabled && sets.any { it.completedAt == null },
+                    modifier = Modifier.testTag("edit-planned-sets-${entry.workoutExercise.id}"),
+                    onClick = { menu = false; onEditPlannedSets() })
                 if (onEquipment != null) DropdownMenuItem(text = { Text("Edit equipment setup") }, enabled = enabled,
                     onClick = { menu = false; onEquipment() })
+                if (history && onNote != null) DropdownMenuItem(text = { Text("Edit exercise note") }, enabled = enabled,
+                    modifier = Modifier.testTag("edit-history-exercise-note-${entry.workoutExercise.id}"),
+                    onClick = { menu = false; onNote() })
                 if (history && onChangeExercise != null) DropdownMenuItem(text = { Text("Change exercise selected") }, enabled = enabled,
                     modifier = Modifier.testTag("change-history-exercise-${entry.workoutExercise.id}"),
                     onClick = { menu = false; onChangeExercise() })
@@ -54,11 +73,12 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
     Surface(Modifier.fillMaxWidth().testTag("active-card-${entry.workoutExercise.id}"), shape = PoliceCardShape,
         color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Border)) {
         Column {
-            Row(Modifier.fillMaxWidth().background(PoliceColors.Raised).padding(horizontal = 16.dp, vertical = 12.dp),
+            if (history && showHistoryHeader) Row(Modifier.fillMaxWidth().background(PoliceColors.Raised).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(if (history && historyCollapsed) entry.exercise.name else if (currentInCard) "CURRENT" else "EXERCISE",
+                if (historyCollapsed || showHistoryExerciseLabel) Text(if (historyCollapsed) entry.exercise.name else "EXERCISE",
                     style = if (history && historyCollapsed) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelSmall,
                     modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                else Spacer(Modifier.weight(1f))
                 Text(if (history) "${sets.size} sets · ${sets.sumOf { (it.actualReps ?: it.reps).toLong() }} reps"
                     else "${sets.count { it.completedAt != null }} / ${sets.size} sets",
                     style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
@@ -67,23 +87,24 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                         contentDescription = if (historyCollapsed) "Expand ${entry.exercise.name}" else "Collapse ${entry.exercise.name}"
                         stateDescription = if (historyCollapsed) "Collapsed" else "Expanded"
                     }) { Text(if (historyCollapsed) "+" else "−", fontSize = 24.sp) }
-                if (history) options()
+                if (!historyMenuInBody) options()
             }
             SirenRule(Modifier.fillMaxWidth())
             if (!history || !historyCollapsed) Column(Modifier.padding(12.dp)
                 .testTag("exercise-card-content-${entry.workoutExercise.id}"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ShieldMark(Modifier.size(42.dp))
+                    if (history) ShieldMark(Modifier.size(42.dp))
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                         Text(entry.exercise.name, style = MaterialTheme.typography.titleLarge)
                         Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
-                    if (!history) options()
+                    if (!history || historyMenuInBody) options()
                 }
                 EquipmentPositionSummary(entry.workoutExercise.equipmentPositions)
                 if (onNote != null || entry.workoutExercise.notes.isNotBlank()) Text(
                     entry.workoutExercise.notes.ifBlank { "Add an exercise note" },
-                    Modifier.fillMaxWidth().border(1.dp, PoliceColors.Border, RoundedCornerShape(10.dp))
+                    Modifier.fillMaxWidth().testTag("exercise-note-${entry.workoutExercise.id}")
+                        .border(1.dp, PoliceColors.Border, RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled && onNote != null, onClickLabel = "Edit note") { onNote?.invoke() }
                         .heightIn(min = 48.dp).padding(12.dp), style = MaterialTheme.typography.bodySmall)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -110,7 +131,7 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                             .padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             SessionReadOnlyCell("${set.position + 1} " + if (set.isWarmup) "Wu" else "Ws",
                                 "Set type ${set.id}", completed, Modifier.weight(1f))
-                            SessionReadOnlyCell(sessionPounds(set.weightGrams), "Session weight ${set.id}", completed, Modifier.weight(1f))
+                            SessionReadOnlyCell(formatSessionPounds(set.weightGrams), "Session weight ${set.id}", completed, Modifier.weight(1f))
                             SessionReadOnlyCell(set.reps.toString(), "Session reps ${set.id}", completed, Modifier.weight(1f))
                             SessionReadOnlyCell(set.actualReps?.toString() ?: if (completed) set.reps.toString() else "—",
                                 "Actual reps ${set.id}", completed, Modifier.weight(1f).testTag("actual-${set.id}"))

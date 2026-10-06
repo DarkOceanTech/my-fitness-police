@@ -45,6 +45,12 @@ class EquipmentKeyboardTest {
                 androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertEquals(1, layouts.single().lineCount)
             assertFalse("The title should fit at normal font size on a 360 dp phone", layouts.single().isLineEllipsized(0))
+            val screen = automation.takeScreenshot()
+            try {
+                val editor = compose.onNodeWithTag("equipment-position-editor").fetchSemanticsNode().boundsInRoot
+                assertTrue("Equipment setup should fill the screen width", editor.width >= screen.width * .90f)
+                assertTrue("Equipment setup should fill the screen height", editor.height >= screen.height * .90f)
+            } finally { screen.recycle() }
             fun scrollTo(tag: String) {
                 compose.onNodeWithTag("equipment-position-list").performScrollToNode(hasTestTag(tag))
             }
@@ -61,12 +67,18 @@ class EquipmentKeyboardTest {
                 val field = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
                 val save = compose.onNodeWithTag("save-equipment-positions").fetchSemanticsNode().boundsInRoot
                 val keyboard = keyboardBounds()!!
-                assertTrue("Field must stay above Save and the docked keyboard: field=$field, save=$save, keyboard=$keyboard", field.bottom <= save.top && field.bottom <= keyboard.top)
+                val besideSave = field.left >= save.right || field.right <= save.left
+                assertTrue("Field must stay above Save or beside the landscape action rail: field=$field, save=$save",
+                    besideSave || field.bottom <= save.top)
+                assertTrue("Field must stay above the docked keyboard: field=$field, keyboard=$keyboard", field.bottom <= keyboard.top)
                 assertTrue("Save must stay above the keyboard", save.bottom <= keyboard.top)
                 val density = instrumentation.targetContext.resources.displayMetrics.density
                 assertTrue("The full text field must remain visible", field.height >= 50 * density)
-                val add = compose.onAllNodesWithTag("add-equipment-position").fetchSemanticsNodes().firstOrNull()?.boundsInRoot
-                if (add != null && add.height > 0) assertTrue("Add must not overlap a field", add.top >= field.bottom || add.bottom <= field.top)
+                // LazyColumn may retain an off-screen item's old bounds while it is not placed.
+                val add = compose.onNodeWithTag("add-equipment-position").takeIf { it.isDisplayed() }
+                    ?.fetchSemanticsNode()?.boundsInRoot
+                captureFilterReview(compose, "equipment-field-$tag")
+                if (add != null && add.height > 0) assertTrue("Add must not overlap a field: add=$add, field=$field", add.top >= field.bottom || add.bottom <= field.top)
             }
             scrollTo("position-value-4")
             compose.onNodeWithTag("position-value-4").performClick().performTextReplacement("9")

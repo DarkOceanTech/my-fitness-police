@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.formatting.*
+
 import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -30,23 +32,18 @@ internal fun WorkoutSessionSummaryScreen(workout: WorkoutDetails, now: Long, act
     val remaining = if (!finished && progress != null) progress.cooldownRemainingMillis(now) else 0L
     val activeMillis = performed.sumOf { it.activeMillis }
     val breakMillis = performed.sumOf { it.restMillis } + if (!finished) finalRest else 0L
-    val pounds = performed.fold(BigDecimal.ZERO) { sum, set ->
+    val pounds = formatWeight(performed.fold(BigDecimal.ZERO) { sum, set ->
         sum + BigDecimal.valueOf(set.weightGrams).multiply(BigDecimal.valueOf((set.actualReps ?: set.reps).toLong()))
-    }.divide(BigDecimal("453.59237"), 1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+    }.divide(BigDecimal("453.59237"), 9, RoundingMode.HALF_UP))
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     Column(modifier.fillMaxSize().testTag("workout-session-summary")) {
         SectionPageHeader("Workout summary", location = workout.workout.displayName(), onBack = onBack,
             backLabel = "Back to Academy", enabled = !action.saving)
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (landscape) 76.dp else 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(if (finished) "Shift complete. Strong work, officer." else "Sets complete. Take your final breather.",
-                style = MaterialTheme.typography.titleMedium, color = PoliceColors.LightBlue)
-            WorkoutSummary(workout, Modifier, durationMillis = progress?.dutyMillis(now), tagPrefix = "summary")
-            Surface(Modifier.fillMaxWidth().testTag("summary-final-rest"), shape = PoliceCardShape,
+        val finalRestPanel: @Composable (Modifier) -> Unit = { panelModifier ->
+            Surface(panelModifier.testTag("summary-final-rest"), shape = PoliceCardShape,
                 color = PoliceColors.Card, border = BorderStroke(1.dp, PoliceColors.Blue)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.padding(if (landscape) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text("FINAL REST", style = MaterialTheme.typography.labelLarge, color = PoliceColors.LightBlue)
                             Text(when { finished -> "Saved with your last set"
@@ -58,14 +55,30 @@ internal fun WorkoutSessionSummaryScreen(workout: WorkoutDetails, now: Long, act
                         Text(sessionTime(if (finished) finalRest else ((remaining + 999) / 1000) * 1000),
                             style = StatTypography.copy(fontSize = 28.sp), modifier = Modifier.testTag("summary-rest-countdown"))
                     }
-                    Text("Recorded break: ${sessionTime(finalRest)}", style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.testTag("summary-rest-recorded"))
-                    if (!finished) PoliceOutlinedButton(onClick = onPauseResume, enabled = !action.saving,
+                    if (!finished && progress?.isPaused == true) PoliceOutlinedButton(onClick = onPauseResume, enabled = !action.saving,
                         modifier = Modifier.fillMaxWidth().testTag("summary-pause-resume")) {
-                        Text(if (progress?.isPaused == true) "Resume cool-down" else "Pause cool-down")
+                        Text("Resume cool-down")
                     }
                 }
             }
+        }
+        val message = if (finished) "Shift complete. Strong work, officer." else "Sets complete. Take your final breather."
+        if (landscape) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("summary-pinned-content"), horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(message, Modifier.weight(0.8f), style = MaterialTheme.typography.titleMedium,
+                color = PoliceColors.LightBlue)
+            finalRestPanel(Modifier.weight(1.2f))
+        } else Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+            .testTag("summary-pinned-content"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(message, style = MaterialTheme.typography.titleMedium, color = PoliceColors.LightBlue)
+            finalRestPanel(Modifier.fillMaxWidth())
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+            .testTag("summary-scroll-content")
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = if (landscape) 76.dp else 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            WorkoutSummary(workout, Modifier, durationMillis = progress?.dutyMillis(now), tagPrefix = "summary")
             Surface(Modifier.fillMaxWidth(), shape = PoliceCardShape, color = PoliceColors.Card,
                 border = BorderStroke(1.dp, PoliceColors.Border)) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -35,10 +37,16 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
     dropTarget: Boolean, dragEnabled: Boolean, collapsed: Boolean, onToggleCollapse: () -> Unit,
     onDragStart: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
     onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?,
-    onAdd: () -> Unit, onCopyLast: () -> Unit, onNote: () -> Unit, onEquipment: () -> Unit, onRemove: () -> Unit,
-    onDeleteSet: (String) -> Unit, onChange: (String, String, String) -> Unit) {
+    onAdd: () -> Unit, onCopyLast: () -> Unit, onViewLastSession: () -> Unit,
+    onNote: () -> Unit, onEquipment: () -> Unit, onRemove: () -> Unit,
+    onDeleteSet: (String) -> Unit, onChange: (String, String, String) -> Unit,
+    setAction: SessionAction, parentListState: LazyListState, parentViewport: Rect,
+    onSetDragState: (Boolean) -> Unit, onReorderSets: (List<String>) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
+    var confirmingRemoval by androidx.compose.runtime.saveable.rememberSaveable(entry.workoutExercise.id) { mutableStateOf(false) }
+    var draggingSet by remember { mutableStateOf(false) }
+    val controlsEnabled = enabled && !draggingSet
     val dragStart by rememberUpdatedState(onDragStart)
     val dragMove by rememberUpdatedState(onDrag)
     val dragEnd by rememberUpdatedState(onDragEnd)
@@ -73,7 +81,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                 Box(Modifier.weight(1f).padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                     if (collapsed) Text(entry.exercise.name, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                 }
-                IconButton(onClick = onToggleCollapse, enabled = enabled,
+                IconButton(onClick = onToggleCollapse, enabled = controlsEnabled,
                     modifier = Modifier.size(56.dp).semantics {
                         contentDescription = (if (collapsed) "Expand " else "Collapse ") + entry.exercise.name
                         stateDescription = if (collapsed) "Collapsed" else "Expanded"
@@ -88,7 +96,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                         Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
                     Box {
-                        IconButton(onClick = { menu = true }, enabled = enabled,
+                        IconButton(onClick = { menu = true }, enabled = controlsEnabled,
                             modifier = Modifier.semantics { contentDescription = "Exercise options for " + entry.exercise.name }) {
                             Text("⋮", fontSize = 24.sp)
                         }
@@ -97,65 +105,30 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                                 onClick = { menu = false; showInfo = true })
                             DropdownMenuItem(text = { Text("Edit equipment setup") },
                                 onClick = { menu = false; onEquipment() })
+                            DropdownMenuItem(text = { Text("View last session") },
+                                enabled = enabled,
+                                modifier = Modifier.testTag("view-last-session-${entry.workoutExercise.id}"),
+                                onClick = { menu = false; onViewLastSession() })
                             DropdownMenuItem(text = { Text("Remove", color = PoliceColors.Error) },
-                                onClick = { menu = false; onRemove() })
+                                enabled = enabled,
+                                onClick = { menu = false; confirmingRemoval = true })
                         }
                     }
                 }
                 EquipmentPositionSummary(entry.workoutExercise.equipmentPositions)
                 Text(entry.workoutExercise.notes.ifBlank { "Add a note prior to workout" },
                     modifier = Modifier.fillMaxWidth().border(1.dp, PoliceColors.Border, RoundedCornerShape(10.dp))
-                        .clickable(enabled = enabled, onClickLabel = "Edit note", onClick = onNote)
+                        .clickable(enabled = controlsEnabled, onClickLabel = "Edit note", onClick = onNote)
                         .heightIn(min = 48.dp).padding(12.dp),
                     style = MaterialTheme.typography.bodySmall)
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("Set", "Modifier", "Type", "Lbs", "Reps").forEach { title ->
-                            Text(title, Modifier.weight(1f), fontSize = 10.sp, color = PoliceColors.Muted, textAlign = TextAlign.Center)
-                        }
-                        Spacer(Modifier.width(48.dp))
-                    }
-                    entry.sets.sortedBy { it.position }.forEachIndexed { index, set ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                                .background(PoliceColors.Background, RoundedCornerShape(8.dp))
-                                .border(1.dp, PoliceColors.Border, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center) {
-                                Text((index + 1).toString(), fontSize = 13.sp)
-                            }
-                            TablePicker("Modifier set ${index + 1}", set.modifier, listOf("none", "superset", "drop_set"), enabled, Modifier.weight(1f),
-                                label = { when (it) { "superset" -> "S"; "drop_set" -> "D"; else -> "R" } },
-                                fullName = { when (it) { "superset" -> "Superset"; "drop_set" -> "Drop set"; else -> "Regular" } }) { onChange(set.id, "modifier", it) }
-                            TablePicker("Type set ${index + 1}", if (set.isWarmup) "warmup" else "working set",
-                                listOf("warmup", "working set"), enabled, Modifier.weight(1f),
-                                label = { if (it == "warmup") "Wu" else "Ws" },
-                                fullName = { if (it == "warmup") "Warm-up" else "Working set" }) { onChange(set.id, "type", it) }
-                            val weight = BigDecimal.valueOf(set.weightGrams).divide(BigDecimal("453.59237"), 2,
-                                RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
-                            val weights = remember(weight) { ((0..600).map { BigDecimal.valueOf(it * 25L, 1)
-                                .stripTrailingZeros().toPlainString() } + weight).distinct().sortedBy { it.toBigDecimal() } }
-                            TablePicker("Weight set ${index + 1}", weight, weights, enabled, Modifier.weight(1f)) {
-                                if (it != weight) onChange(set.id, "weight", it)
-                            }
-                            val reps = remember(set.reps) { ((1..100).map { it.toString() } + set.reps.toString())
-                                .distinct().sortedBy { it.toInt() } }
-                            TablePicker("Reps set ${index + 1}", set.reps.toString(), reps, enabled, Modifier.weight(1f)) {
-                                onChange(set.id, "reps", it)
-                            }
-                            IconButton(onClick = { onDeleteSet(set.id) }, enabled = enabled,
-                                modifier = Modifier.size(48.dp).testTag("delete-planned-set-${set.id}")
-                                    .semantics { contentDescription = "Remove set ${index + 1} of ${entry.exercise.name}" }) {
-                                Text("×", color = if (enabled) PoliceColors.Error else PoliceColors.Muted, fontSize = 24.sp)
-                            }
-                        }
-                    }
-                }
+                ReorderableSetTable(entry, enabled, setAction, parentListState, parentViewport,
+                    onDragState = { draggingSet = it; onSetDragState(it) },
+                    onReorder = onReorderSets, onDeleteSet = onDeleteSet, onChange = onChange)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onAdd, enabled = enabled,
+                    OutlinedButton(onClick = onAdd, enabled = controlsEnabled,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                         modifier = Modifier.weight(1f).testTag("add-set-${entry.workoutExercise.id}")) { Text("Add Set") }
-                    OutlinedButton(onClick = onCopyLast, enabled = enabled && entry.sets.isNotEmpty(),
+                    OutlinedButton(onClick = onCopyLast, enabled = controlsEnabled && entry.sets.isNotEmpty(),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                         modifier = Modifier.weight(1.4f).testTag("copy-last-set-${entry.workoutExercise.id}")) { Text("Copy last set") }
                 }
@@ -163,6 +136,25 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
         }
     }
     if (showInfo) ExerciseInfoDialog(entry.exercise, onDismiss = { showInfo = false })
+    if (confirmingRemoval) AlertDialog(
+        onDismissRequest = { confirmingRemoval = false },
+        containerColor = PoliceColors.Card,
+        title = { Text("Remove exercise?") },
+        text = {
+            val setCount = entry.sets.size
+            Text("Remove ${entry.exercise.name} and its $setCount planned ${if (setCount == 1) "set" else "sets"} from this workout?")
+        },
+        confirmButton = {
+            TextButton(onClick = { confirmingRemoval = false; onRemove() }, enabled = enabled,
+                modifier = Modifier.testTag("confirm-remove-exercise-${entry.workoutExercise.id}")) {
+                Text("Remove", color = if (enabled) PoliceColors.Error else PoliceColors.Muted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { confirmingRemoval = false },
+                modifier = Modifier.testTag("cancel-remove-exercise-${entry.workoutExercise.id}")) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable

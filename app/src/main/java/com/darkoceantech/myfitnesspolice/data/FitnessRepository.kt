@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.first
 class FitnessRepository(private val database: FitnessDatabase) {
     val sessionProgress = WorkoutSessionRepository(database)
     val trainingPlans = TrainingPlanRepository(database)
+    val trainingSchedule = TrainingScheduleRepository(database)
     val workoutEditor = WorkoutEditorRepository(database)
+    val activeExerciseSwap = ActiveExerciseSwapRepository(database)
 
     private suspend fun recordedWorkout(id: String): WorkoutDetails =
         requireNotNull(database.workoutDao().getDetails(id)) { "This workout is no longer available." }.also {
@@ -89,6 +91,14 @@ class FitnessRepository(private val database: FitnessDatabase) {
     suspend fun saveHistorySetNote(workoutId: String, setId: String, notes: String) = database.withTransaction {
         val set = recordedSet(recordedWorkout(workoutId), setId)
         database.workoutSetDao().update(set.copy(notes = notes.trim()))
+    }
+
+    suspend fun saveHistoryExerciseNote(workoutId: String, entryId: String, notes: String) = database.withTransaction {
+        val workout = recordedWorkout(workoutId)
+        val entry = requireNotNull(workout.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is not in the selected workout."
+        }
+        database.workoutExerciseDao().update(entry.workoutExercise.copy(notes = notes.trim()))
     }
 
     suspend fun saveActiveSetNote(workoutId: String, setId: String, notes: String) = database.withTransaction {
@@ -368,6 +378,83 @@ class FitnessRepository(private val database: FitnessDatabase) {
         }
     }
 
+    private suspend fun importTarget(workoutId: String, entryId: String): ExerciseWithSets {
+        val target = requireNotNull(database.workoutDao().getDetails(workoutId)) {
+            "This workout is no longer available."
+        }
+        require(target.workout.kind in listOf("plan", "draft", "edit") && target.workout.finishedAt == null) {
+            "Import sets while creating or editing a workout. Active and recorded sessions cannot be replaced."
+        }
+        return requireNotNull(target.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is no longer in the workout."
+        }
+    }
+
+    suspend fun getExerciseSessionHistory(exerciseId: String): List<ExerciseSessionSnapshot> = database.withTransaction {
+        val workouts = mutableMapOf<String, WorkoutDetails>()
+        database.workoutExerciseDao().completedForExercise(exerciseId).map { entry ->
+            val workout = workouts.getOrPut(entry.workoutExercise.workoutId) {
+                recordedWorkout(entry.workoutExercise.workoutId)
+            }
+            ExerciseSessionSnapshot(workout, entry)
+        }
+    }
+
+    suspend fun getLastSession(workoutId: String, entryId: String): ExerciseSessionSnapshot = database.withTransaction {
+        val target = requireNotNull(database.workoutDao().getDetails(workoutId)) { "This workout is no longer available." }
+        val entry = requireNotNull(target.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is no longer in the workout."
+        }
+        // Match the catalog exercise, including sessions from other workouts or training plans.
+        // For repeated exercises in one session, use its last occurrence in workout order.
+        val source = requireNotNull(database.workoutExerciseDao().latestCompletedForExercise(entry.exercise.id)) {
+            "No completed session was found for ${entry.exercise.name}. Your current sets have not changed."
+        }
+        ExerciseSessionSnapshot(recordedWorkout(source.workoutExercise.workoutId), source)
+    }
+
+    suspend fun editActivePlannedSets(workoutId: String, entryId: String, changes: List<PlannedSetUpdate>) = database.withTransaction {
+        val workout = requireNotNull(database.workoutDao().getDetails(workoutId)) { "This session is no longer available." }
+        require(workout.workout.kind == "session" && workout.workout.finishedAt == null) { "Select an active session." }
+        val entry = requireNotNull(workout.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is not in the selected session."
+        }
+        require(changes.map { it.id }.distinct().size == changes.size) { "Each set can only be edited once." }
+        // Validate the entire batch before writing. A set completed while the editor was open
+        // must be corrected through Set Details instead; its results cannot be overwritten here.
+        val updated = changes.map { change ->
+            val old = requireNotNull(entry.sets.singleOrNull { it.id == change.id }) { "This set is no longer in the exercise." }
+            require(old.completedAt == null) { "This set has been completed. Use Set Details to correct it." }
+            old.copy(reps = change.reps, weightGrams = change.weightGrams,
+                isWarmup = change.isWarmup, modifier = change.modifier)
+        }
+        updated.forEach { database.workoutSetDao().update(it) }
+    }
+
+    suspend fun importLastSession(workoutId: String, entryId: String, sourceEntryId: String? = null): Unit = database.withTransaction {
+        val entry = importTarget(workoutId, entryId)
+        // A preview pins its recorded entry, so a newer session cannot silently replace what was shown.
+        val source = if (sourceEntryId == null) getLastSession(workoutId, entryId).entry
+        else requireNotNull(database.workoutExerciseDao().getDetails(sourceEntryId)) {
+            "The session you viewed is no longer available. Close this view and try again."
+        }.also {
+            recordedWorkout(it.workoutExercise.workoutId)
+            require(it.workoutExercise.exerciseId == entry.workoutExercise.exerciseId) {
+                "The recorded exercise has changed. Close this view and try again."
+            }
+        }
+        require(source.sets.isNotEmpty()) {
+            "The last session for ${entry.exercise.name} has no sets to import. Your current sets have not changed."
+        }
+        entry.sets.forEach { database.workoutSetDao().delete(it.id) }
+        source.sets.sortedBy { it.position }.forEachIndexed { position, set ->
+            // A fresh prescription intentionally excludes recorded results, per-set notes and timers.
+            database.workoutSetDao().insert(WorkoutSet(workoutExerciseId = entryId, position = position,
+                reps = set.reps, weightGrams = set.weightGrams, isWarmup = set.isWarmup, modifier = set.modifier))
+        }
+        // Exercise notes and equipment setup belong to the target workout and are not imported.
+    }
+
     suspend fun copyLastSet(workoutId: String, entryId: String) = database.withTransaction {
         editablePlan(workoutId)
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
@@ -392,6 +479,32 @@ class FitnessRepository(private val database: FitnessDatabase) {
         // Ascending compaction only fills earlier, now-empty positions, preserving the unique index.
         entry.sets.filterNot { it.id == setId }.sortedBy { it.position }.forEachIndexed { index, set ->
             if (set.position != index) database.workoutSetDao().update(set.copy(position = index))
+        }
+    }
+
+    suspend fun reorderSets(workoutId: String, entryId: String, orderedIds: List<String>) = database.withTransaction {
+        val details = requireNotNull(database.workoutDao().getDetails(workoutId)) {
+            "This workout is no longer available."
+        }
+        require(details.workout.kind in listOf("plan", "draft", "edit")) {
+            "Only planned sets can be reordered."
+        }
+        val entry = requireNotNull(details.exercises.singleOrNull { it.workoutExercise.id == entryId }) {
+            "This exercise is no longer in the workout."
+        }
+        val sets = entry.sets.associateBy { it.id }
+        require(orderedIds.size == sets.size && orderedIds.toSet() == sets.keys) {
+            "The set list changed. Please try again."
+        }
+        if (orderedIds.withIndex().all { (position, id) -> sets.getValue(id).position == position }) return@withTransaction
+        // Vacate every existing position before assigning the requested order, preserving the unique index.
+        val temporaryStart = Math.addExact(sets.values.maxOf { it.position }, 1)
+        Math.addExact(temporaryStart, orderedIds.lastIndex)
+        orderedIds.forEachIndexed { index, id ->
+            database.workoutSetDao().update(sets.getValue(id).copy(position = temporaryStart + index))
+        }
+        orderedIds.forEachIndexed { index, id ->
+            database.workoutSetDao().update(sets.getValue(id).copy(position = index))
         }
     }
 

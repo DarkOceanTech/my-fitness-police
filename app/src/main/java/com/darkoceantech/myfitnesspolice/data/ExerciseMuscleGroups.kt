@@ -50,3 +50,12 @@ fun Exercise.mainMuscleGroup(): MuscleGroup {
 
 fun filterByMuscleGroups(exercises: List<Exercise>, selected: Set<MuscleGroup>): List<Exercise> =
     exercises.filter { it.mainMuscleGroup() in selected }
+
+/** Related movements share the browsing muscle group; these are suggestions, not equivalents. */
+fun recommendedExerciseSwaps(current: Exercise, exercises: List<Exercise>): List<Exercise> {
+    val group = current.mainMuscleGroup()
+    if (group == MuscleGroup.OTHER) return emptyList()
+    return exercises.filter { !it.isArchived && it.id != current.id && it.mainMuscleGroup() == group }
+        .sortedWith(compareByDescending<Exercise> { it.equipment.equals(current.equipment, ignoreCase = true) }
+            .thenBy { it.name.lowercase(Locale.ROOT) })
+}

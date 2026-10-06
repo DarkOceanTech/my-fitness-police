@@ -80,6 +80,32 @@ interface WorkoutDao {
 
 @Dao
 interface WorkoutExerciseDao {
+    @Transaction
+    @Query("""
+        SELECT entry.* FROM workout_exercises AS entry
+        INNER JOIN workouts AS workout ON workout.id = entry.workoutId
+        WHERE entry.exerciseId = :exerciseId
+          AND workout.kind = 'session' AND workout.finishedAt IS NOT NULL
+        ORDER BY workout.startedAt DESC, workout.id DESC, entry.position ASC, entry.id ASC
+    """)
+    suspend fun completedForExercise(exerciseId: String): List<ExerciseWithSets>
+
+    @Transaction
+    @Query("""
+        SELECT entry.* FROM workout_exercises AS entry
+        INNER JOIN workouts AS workout ON workout.id = entry.workoutId
+        WHERE entry.exerciseId = :exerciseId
+          AND workout.kind = 'session' AND workout.finishedAt IS NOT NULL
+        ORDER BY workout.finishedAt DESC, workout.startedAt DESC, workout.id DESC,
+                 entry.position DESC, entry.id DESC
+        LIMIT 1
+    """)
+    suspend fun latestCompletedForExercise(exerciseId: String): ExerciseWithSets?
+
+    @Transaction
+    @Query("SELECT * FROM workout_exercises WHERE id = :entryId")
+    suspend fun getDetails(entryId: String): ExerciseWithSets?
+
     @Insert suspend fun insert(exercise: WorkoutExercise)
     @Update suspend fun update(exercise: WorkoutExercise)
     @Query("DELETE FROM workout_exercises WHERE id = :id")

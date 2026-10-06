@@ -67,7 +67,7 @@ class WorkoutSessionFlowUiTest {
         } finally { db.close() }
     }
 
-    @Test fun finalSaveOpensSummaryWithPausableFinalRestAndStaysAfterAutoFinish() {
+    @Test fun finalSavePinsSummaryAndFinalRestAndStaysAfterAutoFinish() {
         val db = database()
         val repo = FitnessRepository(db)
         runBlocking { seed(db, 1); repo.sessionProgress.prepareSession("w") }
@@ -80,14 +80,22 @@ class WorkoutSessionFlowUiTest {
             compose.onNodeWithText("Save reps").performClick()
             waitTag("workout-session-summary")
             compose.onNodeWithTag("summary-final-rest").assertIsDisplayed()
+            compose.onNodeWithTag("summary-rest-recorded").assertDoesNotExist()
+            compose.onNodeWithText("Pause cool-down").assertDoesNotExist()
+            compose.onNodeWithTag("summary-pause-resume").assertDoesNotExist()
+            val pinnedBounds = compose.onNodeWithTag("summary-pinned-content").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithTag("summary-view-history").performScrollTo().assertIsNotEnabled()
-            compose.onNodeWithTag("summary-pause-resume").performScrollTo().performClick()
-            waitTag("pause-reason-input")
-            compose.onNodeWithText("Close").performClick()
+            compose.onNodeWithTag("summary-final-rest").assertIsDisplayed()
+            assertEquals(pinnedBounds, compose.onNodeWithTag("summary-pinned-content").fetchSemanticsNode().boundsInRoot)
+            // A previously paused cool-down must still be resumable after reopening this screen.
+            runBlocking { repo.sessionProgress.pause("w") }
+            waitTag("summary-pause-resume")
             assertTrue(runBlocking { db.sessionStateDao().get("w")!!.isPaused })
             compose.onNodeWithText("Cool-down paused").assertExists()
-            compose.onNodeWithTag("summary-pause-resume").performScrollTo().performClick()
+            compose.onNodeWithTag("summary-pause-resume").performClick()
             compose.waitUntil(5000) { runBlocking { !db.sessionStateDao().get("w")!!.isPaused } }
+            compose.onNodeWithTag("summary-pause-resume").assertDoesNotExist()
+            compose.onNodeWithTag("summary-workout-totals").performScrollTo()
             screenshot("final-rest-summary")
             runBlocking {
                 val state = db.sessionStateDao().get("w")!!
@@ -95,9 +103,15 @@ class WorkoutSessionFlowUiTest {
             }
             compose.waitUntil(8000) { runBlocking { db.workoutDao().getDetails("w")!!.workout.finishedAt != null } }
             compose.onNodeWithTag("workout-session-summary").assertIsDisplayed()
-            compose.onNodeWithTag("summary-rest-recorded").performScrollTo().assertTextEquals("Recorded break: 1:00")
+            compose.onNodeWithTag("summary-rest-recorded").assertDoesNotExist()
+            compose.onNodeWithTag("summary-rest-countdown").assertIsDisplayed().assertTextEquals("1:00")
+            compose.onNodeWithTag("summary-pause-resume").assertDoesNotExist()
+            val finishedPinnedBounds = compose.onNodeWithTag("summary-pinned-content").fetchSemanticsNode().boundsInRoot
             screenshot("finished-summary")
-            compose.onNodeWithTag("summary-view-history").performScrollTo().assertIsEnabled().performClick()
+            compose.onNodeWithTag("summary-view-history").performScrollTo().assertIsEnabled()
+            compose.onNodeWithTag("summary-final-rest").assertIsDisplayed()
+            assertEquals(finishedPinnedBounds, compose.onNodeWithTag("summary-pinned-content").fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithTag("summary-view-history").performClick()
             waitTag("history-detail")
             assertEquals(60_000L, runBlocking { db.workoutSetDao().getForExercise("we").single().restMillis })
             assertEquals(9, runBlocking { db.workoutSetDao().getForExercise("we").single().actualReps })
@@ -111,7 +125,7 @@ class WorkoutSessionFlowUiTest {
     }
     private fun startFirst(db: FitnessDatabase) {
         compose.onNodeWithTag("set-action-s1").performScrollTo().performClick()
-        compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+        compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
     }
     private fun openSession() {
         compose.onNode(hasText("Academy") and hasClickAction()).performClick()

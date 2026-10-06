@@ -26,8 +26,8 @@ class PtoNavigationTest {
             compose.onNodeWithText("My Police Training Officer").assertIsDisplayed()
             compose.onNodeWithText("Indoor and outdoor activity tracking for distance, time, and elevation.").assertIsDisplayed()
             screenshot("pto-home")
-            val activities = listOf("running" to "Running", "hiking" to "Hiking", "kayaking" to "Kayaking",
-                "walking" to "Walking", "road-cycling" to "Road cycling", "snowboarding" to "Snowboarding")
+            val activities = listOf("running" to "Running", "hiking" to "Hiking",
+                "walking" to "Walking", "road-cycling" to "Road cycling", "timer" to "Timer")
             activities.forEachIndexed { index, (tag, title) ->
                 compose.onNodeWithTag("pto-grid").performScrollToNode(hasTestTag("pto-$tag-tile"))
                 compose.onNodeWithTag("pto-$tag-tile").performClick()
@@ -41,16 +41,15 @@ class PtoNavigationTest {
                 compose.onNodeWithTag("pto-$tag-tile").assertIsDisplayed()
             }
             screenshot("pto-last-activities")
-            compose.onNode(hasText("Armory") and hasClickAction()).performClick()
-            compose.onNodeWithText("Support and tools").assertIsDisplayed()
+            compose.onNode(hasText("Precinct") and hasClickAction()).performClick()
+            compose.onNodeWithText("Support and community").assertIsDisplayed()
             compose.onNodeWithText("Call for backup and gear up.").assertIsDisplayed()
-            compose.onNodeWithTag("armory-grid").performScrollToNode(hasTestTag("armory-timer-tile"))
-            compose.onNodeWithTag("armory-timer-tile").assertIsDisplayed()
+            compose.onNodeWithTag("precinct-timer-tile").assertDoesNotExist()
             activities.forEach { (tag, title) ->
-                compose.onNodeWithTag("armory-$tag-tile").assertDoesNotExist()
+                compose.onNodeWithTag("precinct-$tag-tile").assertDoesNotExist()
                 compose.onNodeWithText(title).assertDoesNotExist()
             }
-            compose.onNodeWithTag("armory-category-distance").assertDoesNotExist()
+            compose.onNodeWithTag("precinct-category-distance").assertDoesNotExist()
             runBlocking {
                 assertTrue(db.workoutDao().observeAllDetails().first().isEmpty())
                 assertTrue(db.exerciseDao().getAll().isEmpty())
@@ -58,7 +57,7 @@ class PtoNavigationTest {
         } finally { db.close() }
     }
 
-    @Test fun ptoSelectionRestoresAndStaysIndependentOfArmory() {
+    @Test fun ptoSelectionRestoresAndStaysIndependentOfPrecinct() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, FitnessDatabase::class.java).build()
         try {
@@ -70,14 +69,14 @@ class PtoNavigationTest {
             restoration.emulateSavedInstanceStateRestore()
             compose.onNodeWithTag("pto-construction-title").assertTextEquals("Running")
             compose.onNodeWithTag("pto-construction-dismiss").performClick()
-            compose.onNode(hasText("Armory") and hasClickAction()).performClick()
-            compose.onNodeWithTag("armory-contact-tile").performClick()
-            compose.onNodeWithTag("armory-construction-title").assertTextEquals("Contact")
-            compose.onNodeWithTag("armory-construction-dismiss").performClick()
+            compose.onNode(hasText("Precinct") and hasClickAction()).performClick()
+            compose.onNodeWithTag("precinct-contact-tile").performClick()
+            compose.onNodeWithTag("precinct-construction-title").assertTextEquals("Contact")
+            compose.onNodeWithTag("precinct-construction-dismiss").performClick()
             compose.onNode(hasText("Field") and hasClickAction()).performClick()
             compose.onNodeWithTag("pto-home").assertIsDisplayed()
             compose.onNodeWithTag("pto-construction").assertDoesNotExist()
-            compose.onNodeWithTag("armory-construction").assertDoesNotExist()
+            compose.onNodeWithTag("precinct-construction").assertDoesNotExist()
             compose.onNode(hasText("Reports") and hasClickAction()).performClick()
             compose.onNodeWithText("Progress Reports").assertIsDisplayed()
             screenshot("dor-home")

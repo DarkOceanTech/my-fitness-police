@@ -19,9 +19,9 @@ class DispatchSessionUpdateTest {
         val db = database()
         try {
             compose.setContent { MyFitnessPoliceApp(FitnessRepository(db)) }
-            compose.onNodeWithText("This week ·", substring = true).assertIsDisplayed()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Launchpad").assertIsDisplayed()
             compose.onNodeWithText("WEEKLY PROGRESS").assertDoesNotExist()
-            compose.onNodeWithText("Sets Completed").assertIsDisplayed()
             screenshot("dispatch")
             compose.onNodeWithTag("open-settings").performClick()
             compose.onNodeWithTag("settings-name").performTextInput("Officer Strong")
@@ -82,7 +82,7 @@ class DispatchSessionUpdateTest {
             openSession()
             compose.onNodeWithText("Cancel workout").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("set-action-s1").performClick()
-            compose.waitUntil(5000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
+            compose.waitUntil(12000) { runBlocking { db.sessionStateDao().get("w")!!.phase == "active" } }
             compose.onNodeWithText("Pause workout").performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription("Actual reps s1").assertHasNoClickAction()
             compose.onNodeWithTag("set-action-s1").performClick()

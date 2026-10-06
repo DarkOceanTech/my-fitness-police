@@ -21,14 +21,12 @@ enum class PtoActivity(val title: String, val description: String, val icon: Int
         "Our foot-pursuit unit is lacing up. The only thing running here today is the coffee machine."),
     HIKING("Hiking", "Take your patrol to the trails.", R.drawable.ic_hiking, "hiking",
         "Trail patrol is investigating a suspiciously steep hill. Your hiking tools are still being assembled."),
-    KAYAKING("Kayaking", "Report for paddle duty.", R.drawable.ic_kayaking, "kayaking",
-        "Marine patrol is checking whether the donuts float. Your paddling tools are still in dry dock."),
     WALKING("Walking", "One beat, one step at a time.", R.drawable.ic_walking, "walking",
         "Beat patrol is warming up. This page is taking its first steps through the academy."),
     ROAD_CYCLING("Road cycling", "Get ready for road patrol.", R.drawable.ic_road_cycling, "road-cycling",
         "Traffic division is fitting a siren to a bicycle. Your ride tools are still in the workshop."),
-    SNOWBOARDING("Snowboarding", "Take your patrol to the slopes.", R.drawable.ic_snowboarding, "snowboarding",
-        "Snow patrol is teaching a traffic cone to carve. Your slope tools are still in the workshop."),
+    TIMER("Timer", "Rest periods and intervals.", R.drawable.ic_timer, "timer",
+        "Dispatch is still teaching the stopwatch to count past donut o’clock. Timekeeping backup is on the way."),
 }
 
 @Composable
@@ -50,8 +48,16 @@ fun PtoRoute(selected: PtoActivity?, onSelect: (PtoActivity?) -> Unit, modifier:
                 Text("Activities", style = MaterialTheme.typography.titleLarge, color = PoliceColors.LightBlue,
                     modifier = Modifier.padding(top = 8.dp).semantics { heading() })
             }
-            items(PtoActivity.entries, key = { it.tag }) { activity ->
+            items(PtoActivity.entries.filter { it != PtoActivity.TIMER }, key = { it.tag }) { activity ->
                 SectionLaunchCard(activity.title, activity.description, activity.icon, "pto-${activity.tag}-tile") { onSelect(activity) }
+            }
+            item(key = "circuit-time", span = { GridItemSpan(maxLineSpan) }) {
+                Text("Circuit and Time Tracking", style = MaterialTheme.typography.titleLarge, color = PoliceColors.LightBlue,
+                    modifier = Modifier.padding(top = 8.dp).semantics { heading() })
+            }
+            item(key = "timer") {
+                val timer = PtoActivity.TIMER
+                SectionLaunchCard(timer.title, timer.description, timer.icon, "pto-timer-tile") { onSelect(timer) }
             }
         }
     }

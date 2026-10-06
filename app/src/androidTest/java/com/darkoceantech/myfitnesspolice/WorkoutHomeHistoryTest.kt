@@ -33,9 +33,10 @@ class WorkoutHomeHistoryTest {
         }
         try {
             compose.setContent { MyFitnessPoliceTheme { MyFitnessPoliceApp(repo) } }
-            compose.onNodeWithText("This week ·", substring = true).assertIsDisplayed()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Launchpad").assertIsDisplayed()
             compose.onNodeWithText("MyFitnessPolice").assertIsDisplayed()
-            val navigation = listOf("Dispatch", "Academy", "Field", "Reports", "Armory")
+            val navigation = listOf("Dispatch", "Academy", "Field", "Reports", "Precinct")
             val positions = navigation.map { label ->
                 compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot.left
             }
@@ -43,8 +44,10 @@ class WorkoutHomeHistoryTest {
             compose.onNode(hasText("Dispatch") and hasClickAction()).assertIsSelected()
             compose.onNodeWithContentDescription("Add workout").assertDoesNotExist()
             screenshot("dashboard-home")
-            compose.onNodeWithTag("weekly-Weight-value").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithTag("weekly-Activity-value").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-value"))
+            compose.onNodeWithTag("weekly-volume-value").assertIsDisplayed()
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-density-value"))
+            compose.onNodeWithTag("weekly-density-value").assertIsDisplayed()
             screenshot("dashboard-scrolled")
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()
             compose.onNodeWithTag("workout-section-0").performClick()

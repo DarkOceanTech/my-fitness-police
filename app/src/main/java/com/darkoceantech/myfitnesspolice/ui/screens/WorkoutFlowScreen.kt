@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.formatting.*
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
@@ -129,7 +131,7 @@ fun WorkoutFlowScreen(model: SessionViewModel, history: Boolean, modifier: Modif
                 items(entry.sets.filter { !history || it.completedAt != null }.sortedBy { it.position }, key = { it.id }) { set ->
                     Card(Modifier.fillMaxWidth(), shape = PoliceCardShape, border = BorderStroke(1.dp, PoliceColors.Border)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text("${set.actualReps ?: set.reps} reps × ${pounds(set.weightGrams)} lbs", style = StatTypography.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize))
+                            Text("${set.actualReps ?: set.reps} reps × ${formatSessionPounds(set.weightGrams)} lbs", style = StatTypography.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize))
                             if (details.sessionState != null && set.actualReps != null) Text(
                                 "Planned: ${set.reps} reps · Active ${sessionTime(set.activeMillis)} · Break ${sessionTime(set.restMillis)}",
                                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
@@ -221,7 +223,7 @@ private fun SetDialog(set: WorkoutSet?, action: SessionAction, onDismiss: () -> 
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ScrollPicker("Reps", reps, repOptions, !action.saving) { reps = it }
-                ScrollPicker("Weight (lbs)", weight, weightOptions, !action.saving) { weight = it }
+                ScrollPicker("Weight (lbs)", weight, weightOptions, !action.saving, ::formatPoundsText) { weight = it }
                 Text("Drag the dropdown list to choose a value. Use 0 lbs for bodyweight.")
                 action.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
@@ -239,14 +241,14 @@ private fun SetDialog(set: WorkoutSet?, action: SessionAction, onDismiss: () -> 
 }
 
 @Composable
-private fun ScrollPicker(label: String, value: String, options: List<String>, enabled: Boolean, onSelect: (String) -> Unit) {
+private fun ScrollPicker(label: String, value: String, options: List<String>, enabled: Boolean, formatValue: (String) -> String = { it }, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium)
         Box {
             OutlinedButton(onClick = { expanded = true }, enabled = enabled,
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }) {
-                Text(value, Modifier.weight(1f))
+                Text(formatValue(value), Modifier.weight(1f))
                 Text("⌄")
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -254,7 +256,7 @@ private fun ScrollPicker(label: String, value: String, options: List<String>, en
                     initialFirstVisibleItemIndex = (options.indexOf(value) - 2).coerceAtLeast(0))
                 LazyColumn(Modifier.width(240.dp).height(240.dp).testTag("$label options"), state = scroll) {
                     items(options, key = { it }) { option ->
-                        DropdownMenuItem(text = { Text(if (option == value) "$option  ✓" else option) },
+                        DropdownMenuItem(text = { Text(if (option == value) "${formatValue(option)}  ✓" else formatValue(option)) },
                             onClick = { onSelect(option); expanded = false })
                     }
                 }

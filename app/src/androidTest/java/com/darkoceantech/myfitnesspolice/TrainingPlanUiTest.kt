@@ -54,11 +54,7 @@ class TrainingPlanUiTest {
             compose.onNodeWithText("Training Plan").assertIsDisplayed()
             compose.onNodeWithTag("training-plan-name").performTextInput("Back + Arms + Abs")
             Espresso.closeSoftKeyboard()
-            compose.onNodeWithTag("training-plan-day").performClick()
-            compose.onNodeWithText("Mon", substring = false).assertIsDisplayed()
-            capture("training-day-menu")
-            compose.onNodeWithText("Monday").performClick()
-            compose.onNodeWithTag("training-plan-day").assert(hasText("Mon"))
+            compose.onNodeWithTag("training-plan-day").assertDoesNotExist()
             val excludedBounds = compose.onNodeWithTag("available-workouts").fetchSemanticsNode().boundsInRoot
             val includedBounds = compose.onNodeWithTag("included-workouts").fetchSemanticsNode().boundsInRoot
             assertTrue(excludedBounds.right <= includedBounds.left)
@@ -100,7 +96,7 @@ class TrainingPlanUiTest {
             waitTag("workout-home")
             val plan = runBlocking { repo.trainingPlans.observeAll().first().single() }
             assertEquals(listOf(strength, back, abs), plan.workoutIds())
-            assertEquals("Monday", plan.plan.dayOfWeek)
+            assertEquals("", plan.plan.dayOfWeek)
             assertEquals(4, runBlocking { repo.observeSessions().first().size })
             homeScroll(hasTestTag("training-plan-${plan.plan.id}"))
             capture("training-home")
