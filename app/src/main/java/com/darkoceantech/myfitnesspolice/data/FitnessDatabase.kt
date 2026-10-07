@@ -8,12 +8,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
-        TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class],
-    version = 15,
+        TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class,
+        StretchCatalogRow::class, StretchRoutineRow::class, StretchSessionRow::class, StretchPreferences::class],
+    version = 16,
     exportSchema = true,
 )
 @androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class)
 abstract class FitnessDatabase : RoomDatabase() {
+    abstract fun stretchDao(): StretchDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun workoutDao(): WorkoutDao
     abstract fun workoutExerciseDao(): WorkoutExerciseDao
@@ -23,6 +25,16 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingScheduleDao(): TrainingScheduleDao
 
     companion object {
+        val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS stretch_catalog (id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS stretch_routines (id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS stretch_sessions (id TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, snapshot TEXT NOT NULL, progress TEXT NOT NULL, notes TEXT NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_stretch_sessions_startedAt ON stretch_sessions(startedAt)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS stretch_preferences (id INTEGER NOT NULL, work INTEGER NOT NULL, rest INTEGER NOT NULL, switch INTEGER NOT NULL, sound INTEGER NOT NULL, vibration INTEGER NOT NULL, PRIMARY KEY(id))")
+                StretchCatalog.seed(db)
+            }
+        }
         val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS training_schedule (
@@ -203,7 +215,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }
@@ -214,5 +226,6 @@ internal object SeedExercises : RoomDatabase.Callback() {
         super.onCreate(db)
         // Creation and migration seed before the first DAO query; never replace referenced rows.
         ExerciseCatalog.seed(db)
+        StretchCatalog.seed(db)
     }
 }

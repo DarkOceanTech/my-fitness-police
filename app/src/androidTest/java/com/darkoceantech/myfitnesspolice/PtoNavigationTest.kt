@@ -27,7 +27,7 @@ class PtoNavigationTest {
             compose.onNodeWithText("Indoor and outdoor activity tracking for distance, time, and elevation.").assertIsDisplayed()
             screenshot("pto-home")
             val activities = listOf("running" to "Running", "hiking" to "Hiking",
-                "walking" to "Walking", "road-cycling" to "Road cycling", "timer" to "Timer")
+                "walking" to "Walking", "road-cycling" to "Road cycling")
             activities.forEachIndexed { index, (tag, title) ->
                 compose.onNodeWithTag("pto-grid").performScrollToNode(hasTestTag("pto-$tag-tile"))
                 compose.onNodeWithTag("pto-$tag-tile").performClick()
@@ -107,7 +107,9 @@ class PtoNavigationTest {
             compose.onNodeWithTag("workout-section-0").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("return-to-active-workout").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("return-to-active-workout").performClick()
-            compose.onNodeWithText("Finish workout").performClick()
+            compose.waitUntil(8000) { compose.onAllNodesWithTag("summary-review-sets").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("summary-review-sets").performScrollTo().performClick()
+            compose.onNodeWithText("Finish workout").performScrollTo().performClick()
             compose.onNodeWithText("Finish", substring = false).performClick()
             compose.waitUntil(8000) { compose.onAllNodesWithTag("history-detail").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasText("Reports") and hasClickAction()).assertIsSelected()

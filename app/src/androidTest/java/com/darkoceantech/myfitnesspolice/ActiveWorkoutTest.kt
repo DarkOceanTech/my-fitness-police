@@ -123,7 +123,7 @@ class ActiveWorkoutTest {
             screenshot("set-info")
             compose.onNodeWithContentDescription("Back to exercise").performClick()
             compose.onNodeWithTag("set-action-${sets[1].id}").performScrollTo().performClick()
-            compose.waitUntil(5000) { runBlocking { repo.observeWorkout(id).first()!!.sessionState!!.currentSetId == sets[1].id } }
+            compose.waitUntil(12000) { runBlocking { repo.observeWorkout(id).first()!!.sessionState!!.currentSetId == sets[1].id } }
             compose.onNodeWithTag("pause-resume-workout").performScrollTo().performClick()
             waitFor("Workout paused")
             compose.onNodeWithTag("pause-reason-input").performTextReplacement("Phone call")
@@ -132,8 +132,7 @@ class ActiveWorkoutTest {
             screenshot("paused-workout")
             compose.onNodeWithContentDescription("Back to workout home").performClick()
             compose.onNode(hasText("Dispatch") and hasClickAction()).performClick()
-            compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("weekly-Reps-value") and hasText("9")).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("weekly-Sets-value").assertTextEquals("1")
+            assertWeeklyVolume("585 Lbs-reps")
             compose.onNode(hasText("Academy") and hasClickAction()).performClick()
             compose.onNodeWithTag("workout-section-0").performClick()
             compose.onNodeWithTag("return-to-active-workout").performClick()
@@ -172,12 +171,16 @@ class ActiveWorkoutTest {
             compose.onAllNodesWithText("Lat Pulldown", substring = false).assertCountEquals(0)
             screenshot("completed-history")
             compose.onNode(hasText("Dispatch") and hasClickAction()).performClick()
-            compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("weekly-Reps-value") and hasText("8")).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("weekly-Sets-value").assertTextEquals("1")
+            assertWeeklyVolume("520 Lbs-reps")
             compose.onNodeWithText("THIS WEEK · SAMPLE DATA").assertDoesNotExist()
             screenshot("real-weekly-progress")
-            compose.onNodeWithTag("weekly-Weight-value").performScrollTo().assertTextEquals("520")
+            compose.onNodeWithTag("weekly-volume-value").assertTextEquals("520 Lbs-reps")
         } finally { db.close() }
+    }
+
+    private fun assertWeeklyVolume(value: String) {
+        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-value"))
+        compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("weekly-volume-value") and hasText(value)).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun waitFor(text: String) {

@@ -80,10 +80,10 @@ class CalendarScheduleTest {
             old.execSQL("INSERT INTO workout_session_states (workoutId, phase, currentSetId, phaseElapsedMillis, dutyElapsedMillis, isPaused, awaitingActual, pauseReason) VALUES ('log', 'finished', 'set', 0, 1000, 0, 0, '')")
             old.version = 14
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_14_15).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
-            assertEquals(15, db.openHelper.writableDatabase.version)
+            assertEquals(16, db.openHelper.writableDatabase.version)
             assertEquals("Monday", db.trainingPlanDao().get("p")!!.plan.dayOfWeek)
             assertEquals(10, db.trainingPlanDao().get("p")!!.exerciseMembers.single().member.sets.single().reps)
             val log = db.workoutDao().getDetails("log")!!

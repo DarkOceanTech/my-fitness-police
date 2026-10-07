@@ -25,7 +25,7 @@ enum class PtoActivity(val title: String, val description: String, val icon: Int
         "Beat patrol is warming up. This page is taking its first steps through the academy."),
     ROAD_CYCLING("Road cycling", "Get ready for road patrol.", R.drawable.ic_road_cycling, "road-cycling",
         "Traffic division is fitting a siren to a bicycle. Your ride tools are still in the workshop."),
-    TIMER("Timer", "Rest periods and intervals.", R.drawable.ic_timer, "timer",
+    TIMER("Mobility Tracker", "Build timed stretching and mobility routines for your morning, warm-up, or cool-down. Track work, rest, and time to switch sides.", R.drawable.ic_timer, "mobility-tracker",
         "Dispatch is still teaching the stopwatch to count past donut o’clock. Timekeeping backup is on the way."),
 }
 
@@ -57,10 +57,10 @@ fun PtoRoute(selected: PtoActivity?, onSelect: (PtoActivity?) -> Unit, modifier:
             }
             item(key = "timer") {
                 val timer = PtoActivity.TIMER
-                SectionLaunchCard(timer.title, timer.description, timer.icon, "pto-timer-tile") { onSelect(timer) }
+                SectionLaunchCard(timer.title, timer.description, timer.icon, "pto-mobility-tracker-tile") { onSelect(timer) }
             }
         }
     }
-    if (selected != null) FeatureConstructionDialog(selected.title, selected.icon, selected.constructionMessage,
+    if (selected != null && selected != PtoActivity.TIMER) FeatureConstructionDialog(selected.title, selected.icon, selected.constructionMessage,
         homeTitle = "Field Training", tagPrefix = "pto", onDismiss = { onSelect(null) })
 }

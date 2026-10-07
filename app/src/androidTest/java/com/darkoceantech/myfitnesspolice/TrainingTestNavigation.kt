@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 
 internal fun openTrainingPlanFromWorkout(compose: ComposeContentTestRule, trainingId: String) {
     compose.onNodeWithContentDescription("Back to workout home").performClick()
+    compose.waitUntil(8000) { compose.onAllNodesWithTag("workout-home").fetchSemanticsNodes().isNotEmpty() }
     compose.onNodeWithTag("workout-home").performScrollToNode(hasTestTag("workout-section-1"))
     compose.onNodeWithTag("workout-section-1").performClick()
     compose.onNodeWithTag("workout-home").performScrollToNode(hasTestTag("training-plan-$trainingId"))

@@ -38,11 +38,11 @@ class WorkoutProvenanceMigrationTest {
             old.version = 11
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
+            .addMigrations(FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
             val migrated = db.workoutDao().getDetails("history")!!
-            assertEquals(15, db.openHelper.writableDatabase.version)
+            assertEquals(16, db.openHelper.writableDatabase.version)
             assertEquals(WorkoutSet(id = "set", workoutExerciseId = "entry", position = 0, reps = 10,
                 actualReps = 8, weightGrams = 12345, completedAt = 6000, isWarmup = true,
                 activeMillis = 5000, restMillis = 3000, notes = "set note", rpe = 7), migrated.orderedSets().single())

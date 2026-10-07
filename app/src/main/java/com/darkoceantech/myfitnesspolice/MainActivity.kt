@@ -38,6 +38,11 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
     val sessionModel: SessionViewModel = viewModel(factory = factory)
     val exercisesModel: ExercisesViewModel = viewModel(factory = factory)
     val dashboardModel: DashboardViewModel = viewModel(factory = factory)
+    val stretchModel: StretchViewModel = viewModel(factory = factory)
+    val mobility by stretchModel.state.collectAsStateWithLifecycle()
+    val mobilitySession = mobility.sessions.firstOrNull { it.endedAt == null }
+    MobilityTimerCues(stretchModel, mobility.preferences)
+    var requestedMobilitySession by rememberSaveable { mutableStateOf<String?>(null) }
     var launchPlanId by rememberSaveable { mutableStateOf<String?>(null) }
     var dispatchDay by rememberSaveable { mutableStateOf(java.time.LocalDate.now().toString()) }
     var historyFromLaunchpad by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +104,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                                 requestedPlanId = launchPlanId, requestedScheduleDate = dispatchDay, onPlanRequestHandled = { launchPlanId = null },
                                 onReturnToLaunchpad = { selectDestination(AppDestinations.DISPATCH) },
                                 trainingVisible = trainingVisible, onTrainingVisibleChange = { trainingVisible = it },
+                                timedSessionActive = mobilitySession != null,
                                 onFinished = { id ->
                                     historyFromLaunchpad = false
                                     trainingVisible = false
@@ -106,7 +112,10 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                                     historyOpen = true
                                     currentDestination = AppDestinations.DOR
                                 })
-                            AppDestinations.PTO -> PtoRoute(ptoSelection, onSelect = { ptoSelection = it }, modifier = screenModifier)
+                            AppDestinations.PTO -> if (ptoSelection == PtoActivity.TIMER) StretchTrackerRoute(stretchModel,
+                                onBack = { ptoSelection = null }, requestedSession = requestedMobilitySession,
+                                onRequestHandled = { requestedMobilitySession = null }, strengthActive = currentSession != null)
+                            else PtoRoute(ptoSelection, onSelect = { ptoSelection = it }, modifier = screenModifier)
                             AppDestinations.DOR -> {
                                 if (historyOpen) WorkoutHistoryScreen(sessionModel, historySelection, { historySelection = it }, screenModifier,
                                     onBack = { historyOpen = false; historySelection = null },
@@ -122,6 +131,11 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                     }
                     if (currentSession != null && !(currentDestination == AppDestinations.ACADEMY && trainingVisible)) {
                         CurrentSessionShortcut(currentSession, onOpen = ::returnToSession)
+                    }
+                    if (mobilitySession != null && !(currentDestination == AppDestinations.PTO && ptoSelection == PtoActivity.TIMER)) {
+                        MobilitySessionShortcut(mobilitySession, stretchModel, onOpen = {
+                            selectDestination(AppDestinations.PTO); ptoSelection = PtoActivity.TIMER; requestedMobilitySession = mobilitySession.id
+                        })
                     }
                     if (!landscapeSession) PoliceBottomNavigation(currentDestination, ::selectDestination)
                 }

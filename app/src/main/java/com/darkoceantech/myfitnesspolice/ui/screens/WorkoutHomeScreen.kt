@@ -37,7 +37,7 @@ private enum class GymSection(val title: String, val testTag: String) {
 fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel, modifier: Modifier = Modifier,
     onFinished: (String) -> Unit = {}, trainingVisible: Boolean? = null, onTrainingVisibleChange: (Boolean) -> Unit = {},
     requestedPlanId: String? = null, onPlanRequestHandled: () -> Unit = {}, onReturnToLaunchpad: () -> Unit = {},
-    requestedScheduleDate: String? = null) {
+    requestedScheduleDate: String? = null, timedSessionActive: Boolean = false) {
     val state by model.state.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
     var savedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -103,7 +103,7 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
         onWorkouts = { trainingEditor = false; trainingPlanId = null; section = GymSection.Workouts },
         onSave = model::saveTrainingPlanItems, exercises = state.exercises)
     else if (selectedTraining != null) TrainingPlanDetailScreen(selectedTraining, state.sessions, action, modifier,
-        hasActiveSession = activeSession != null,
+        hasActiveSession = activeSession != null || timedSessionActive,
         onBack = { back() }, onEdit = { model.clearError(); trainingEditor = true },
         onStart = { model.clearError(); requestedStart = true; model.startTraining(selectedTraining.plan.id) },
         onWorkout = { model.clearError(); savedId = it }, onDelete = { model.deleteTrainingPlan(selectedTraining.plan.id) },

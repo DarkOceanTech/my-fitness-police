@@ -48,7 +48,7 @@ class TrainingScheduleMigrationTest {
             old.version = 10
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
+            .addMigrations(FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
             val history = db.workoutDao().getDetails("history")!!
@@ -77,7 +77,7 @@ class TrainingScheduleMigrationTest {
             db.close(); db = open()
             assertEquals(original.copy(rpe = 10, notes = "updated note"), db.workoutDao().getDetails("history")!!.orderedSets().single())
             assertEquals(template, db.workoutDao().getDetails("plan"))
-            assertEquals(15, db.openHelper.writableDatabase.version)
+            assertEquals(16, db.openHelper.writableDatabase.version)
         } finally { db.close(); context.deleteDatabase(filename) }
     }
 }

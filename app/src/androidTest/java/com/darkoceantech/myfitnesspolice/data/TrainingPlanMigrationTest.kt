@@ -39,7 +39,7 @@ class TrainingPlanMigrationTest {
             old.execSQL("INSERT INTO workout_sets (id, workoutExerciseId, position, reps, actualReps, weightGrams, completedAt, isWarmup, activeMillis, restMillis, notes) VALUES ('s', 'entry', 0, 10, 7, 10000, 1500, 0, 15000, 20000, 'set note')")
             old.version = 8
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename).addMigrations(FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename).addMigrations(FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
             val groups = db.trainingPlanDao().observeAll().first()

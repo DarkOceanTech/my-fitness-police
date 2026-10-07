@@ -33,7 +33,7 @@ class EquipmentPositionMigrationTest {
             old.execSQL("INSERT INTO workout_sets (id, workoutExerciseId, position, reps, weightGrams, isWarmup, notes) VALUES ('set', 'entry', 0, 10, 10000, 0, 'set note')")
             old.version = 7
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_7_8, FitnessDatabase.MIGRATION_8_9, FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
             val before = db.workoutDao().getDetails("plan")!!

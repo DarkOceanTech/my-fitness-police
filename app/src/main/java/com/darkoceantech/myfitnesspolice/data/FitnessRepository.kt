@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
 
 class FitnessRepository(private val database: FitnessDatabase) {
+    val stretches = StretchRepository(database)
     val sessionProgress = WorkoutSessionRepository(database)
     val trainingPlans = TrainingPlanRepository(database)
     val trainingSchedule = TrainingScheduleRepository(database)
@@ -339,6 +340,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
     fun observeSessions() = database.workoutDao().observeAllDetails()
 
     private suspend fun requireNoUnfinishedSession() {
+        require(database.stretchDao().active() == null) { "Finish or cancel your active stretch routine before starting strength training." }
         require(database.workoutDao().observeUnfinished().first().isEmpty()) {
             "A workout is already in progress. Return to your current session before starting another."
         }

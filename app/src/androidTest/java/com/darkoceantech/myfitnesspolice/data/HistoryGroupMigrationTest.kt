@@ -44,10 +44,10 @@ class HistoryGroupMigrationTest {
             old.version = 12
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15).build()
+            .addMigrations(FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
         var db = open()
         try {
-            assertEquals(15, db.openHelper.writableDatabase.version)
+            assertEquals(16, db.openHelper.writableDatabase.version)
             val migrated = listOf("week-one", "week-two").mapIndexed { index, id ->
                 val workout = db.workoutDao().getDetails(id)!!
                 val start = 1000L + index * 604800000L
