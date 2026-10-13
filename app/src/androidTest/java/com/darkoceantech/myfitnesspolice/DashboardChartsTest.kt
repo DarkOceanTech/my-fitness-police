@@ -58,34 +58,41 @@ class DashboardChartsTest {
         } }
     }
 
-    @Test fun fiveDayCalendarIsBoundedAndDaySelectionOpensCorrectLaunchItems() {
-        val state = mutableStateOf(DashboardUiState(report(), false))
+    @Test fun completeWeekCalendarSwipesWithoutDateLimitAndOpensCorrectBlotterItems() {
+        val source = input().copy(schedule = input().schedule + DashboardSchedule("plan", day.plusDays(1)))
+        val state = mutableStateOf(DashboardUiState(report(source), false))
         var plan: String? = null; var log: String? = null
-        show(state, onDate = { state.value = DashboardUiState(report(selected = it), false) },
+        show(state, onDate = { state.value = DashboardUiState(report(source, selected = it), false) },
             onPlan = { plan = it }, onLog = { log = it })
         compose.onNodeWithTag("calendar-$day").assertIsSelected()
-        val strip = compose.onNodeWithTag("launchpad-calendar").fetchSemanticsNode().boundsInRoot
-        val width = compose.onNodeWithTag("calendar-$day").fetchSemanticsNode().boundsInRoot.width
-        // Five equal pills plus four equal gaps fill the strip.
-        assertTrue(width > strip.width / 6 && width < strip.width / 5)
-        screenshot("launchpad")
+        calendarWeek(day).forEach { compose.onNodeWithTag("calendar-$it").assertIsDisplayed() }
+        screenshot("daily-blotter")
+        compose.onNodeWithTag("calendar-${day.plusDays(1)}").performClick().assertIsSelected()
         compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-plan"))
         compose.onNodeWithTag("launch-plan").performClick()
         compose.runOnIdle { assertEquals("plan", plan) }
+        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-calendar"))
+        compose.onNodeWithTag("calendar-$day").performClick().assertIsSelected()
         compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-session-0"))
         compose.onNodeWithTag("launch-session-0").performClick()
         compose.runOnIdle { assertEquals("session-0", log) }
         compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-calendar"))
-        compose.onNodeWithTag("launchpad-calendar").performScrollToIndex(0)
-        compose.onNodeWithTag("calendar-${day.minusDays(10)}").performClick().assertIsSelected()
+        repeat(2) { week ->
+            compose.onNodeWithTag("daily-blotter-weeks").performTouchInput { swipeLeft() }
+            compose.onNodeWithTag("calendar-${day.plusWeeks((week + 1).toLong())}").assertIsSelected()
+        }
+        calendarWeek(day.plusWeeks(2)).forEach { compose.onNodeWithTag("calendar-$it").assertIsDisplayed() }
         compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-empty"))
         compose.onNodeWithTag("launchpad-empty").assertIsDisplayed()
-        compose.onNodeWithTag("calendar-${day.minusDays(11)}").assertDoesNotExist()
-        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-calendar"))
-        compose.onNodeWithTag("launchpad-calendar").performScrollToIndex(20)
-        compose.onNodeWithTag("calendar-${day.plusDays(10)}").performClick().assertIsSelected()
-        compose.onNodeWithTag("calendar-${day.plusDays(11)}").assertDoesNotExist()
         screenshot("calendar-future-empty")
+        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-calendar"))
+        repeat(3) { week ->
+            compose.onNodeWithTag("daily-blotter-weeks").performTouchInput { swipeRight() }
+            compose.onNodeWithTag("calendar-${day.plusWeeks((1 - week).toLong())}").assertIsSelected()
+        }
+        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-session-1"))
+        compose.onNodeWithTag("launch-session-1").performClick()
+        compose.runOnIdle { assertEquals("session-1", log) }
     }
 
     @Test fun allTwelveChartsHaveFullScreenScienceSpecsAndReadableData() {
@@ -138,15 +145,16 @@ class DashboardChartsTest {
         screenshot("empty-metrics")
     }
 
-    @Test fun launchpadOpensSavedPlanAndRecordedLogThroughMainNavigation() {
+    @Test fun dailyBlotterOpensScheduledPlanAndRecordedLogThroughMainNavigation() {
         val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, FitnessDatabase::class.java).build()
         val now = System.currentTimeMillis()
         val today = LocalDate.now()
+        val pendingDate = if (today.dayOfWeek == DayOfWeek.SUNDAY) today.minusDays(1) else today.plusDays(1)
         runBlocking {
             db.exerciseDao().insert(Exercise("e", "Cable row", "Cable", primaryMuscles = "Latissimus dorsi"))
             db.trainingPlanDao().insert(TrainingPlan("p", "Back patrol", now - 7 * 86_400_000L, trainingWeekdays[today.dayOfWeek.value - 1]))
             db.trainingPlanDao().insertExerciseMembers(listOf(TrainingPlanExercise("p", "e", 0)))
-            db.trainingScheduleDao().insert(listOf(TrainingSchedule("p", today.toString())))
+            db.trainingScheduleDao().insert(listOf(TrainingSchedule("p", today.toString()), TrainingSchedule("p", pendingDate.toString())))
             db.workoutDao().insert(Workout("s", startedAt = now - 5000, finishedAt = now - 1000, sourceTrainingPlanId = "p", trainingPlan = "Back patrol"))
             db.workoutExerciseDao().insert(WorkoutExercise("se", "s", "e", 0))
             db.workoutSetDao().insert(WorkoutSet("ss", "se", 0, 10, 10000, completedAt = now - 2000, actualReps = 9))
@@ -154,14 +162,16 @@ class DashboardChartsTest {
         try {
             compose.setContent { MyFitnessPoliceApp(FitnessRepository(db)) }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("calendar-$pendingDate").performClick()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-p"))
             compose.onNodeWithTag("launch-p").performClick()
             compose.onNodeWithTag("training-plan-detail").assertIsDisplayed()
             compose.onNodeWithText("Back patrol").assertIsDisplayed()
-            compose.onNodeWithTag("schedule-training").assertDoesNotExist()
+            compose.onNodeWithTag("schedule-training").assertIsDisplayed()
             compose.onNode(hasText("Academy") and hasClickAction()).assertIsSelected()
-            compose.onNodeWithContentDescription("Back to Launchpad").performClick()
+            compose.onNodeWithContentDescription("Back to Daily Blotter").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("daily-blotter-today").performClick()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-s"))
             compose.onNodeWithTag("launch-s").performClick()
             compose.onNodeWithTag("history-detail").assertIsDisplayed()
@@ -171,7 +181,7 @@ class DashboardChartsTest {
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-s"))
             compose.onNodeWithTag("launch-s").performClick()
             compose.onNodeWithTag("history-detail").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Back to Launchpad").performClick()
+            compose.onNodeWithContentDescription("Back to Daily Blotter").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
         } finally { db.close() }
     }

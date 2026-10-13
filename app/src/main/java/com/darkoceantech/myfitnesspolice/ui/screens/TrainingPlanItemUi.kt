@@ -48,12 +48,13 @@ internal val TrainingItemsSaver = listSaver<List<TrainingPlanItem>, String>(
         is TrainingPlanItem.WorkoutItem -> JSONObject().put("workout", item.workoutId)
         is TrainingPlanItem.ExerciseItem -> JSONObject().put("exercise", item.exerciseId)
             .put("sets", JSONArray().apply { item.sets.forEach { put(it.json()) } })
+            .put("equipment", EquipmentConfigurationConverters().encode(item.equipmentOverride) ?: JSONObject.NULL)
     }.toString() } },
     restore = { saved -> saved.map { value ->
         val json = JSONObject(value)
         if (json.has("workout")) TrainingPlanItem.WorkoutItem(json.getString("workout"))
         else TrainingPlanItem.ExerciseItem(json.getString("exercise"), json.getJSONArray("sets").let { sets ->
             (0 until sets.length()).map { trainingSet(sets.getJSONObject(it)) }
-        })
+        }, if (json.isNull("equipment")) null else EquipmentConfigurationConverters().decode(json.getString("equipment")))
     } }
 )

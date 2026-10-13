@@ -19,6 +19,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.darkoceantech.myfitnesspolice.data.EquipmentPosition
 import com.darkoceantech.myfitnesspolice.data.ExerciseWithSets
+import com.darkoceantech.myfitnesspolice.data.equipmentConfiguration
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.darkoceantech.myfitnesspolice.ui.theme.*
 
 private val PositionListSaver = listSaver<List<EquipmentPosition>, String>(
@@ -29,6 +31,20 @@ private val PositionListSaver = listSaver<List<EquipmentPosition>, String>(
 @Composable
 internal fun EquipmentPositionEditor(entry: ExerciseWithSets, action: SessionAction,
     onDismiss: () -> Unit, onEdit: () -> Unit, onSave: (List<EquipmentPosition>) -> Unit) {
+    val model = LocalEquipmentLibraryModel.current
+    if (model != null) {
+        val libraryAction by model.action.collectAsStateWithLifecycle()
+        val revision = remember { libraryAction.revision }
+        LaunchedEffect(libraryAction.revision) {
+            if (libraryAction.revision > revision && libraryAction.completedAction == "entry") { onDismiss(); model.reset() }
+        }
+        val session = entry.workoutExercise.equipmentSnapshot != null
+        EquipmentConfigurationEditor(entry.equipmentConfiguration(), "Equipment setup", session = session, allowDefault = !session,
+            action = libraryAction, onDismiss = { if (!libraryAction.saving) { onDismiss(); model.reset() } },
+            onSave = { config, default, name, type -> model.saveEntry(entry.workoutExercise.workoutId, entry.workoutExercise.id, config, default, name, type) })
+        return
+    }
+
     var positions by rememberSaveable(entry.workoutExercise.id, stateSaver = PositionListSaver) {
         mutableStateOf(entry.workoutExercise.equipmentPositions.ifEmpty { listOf(EquipmentPosition("", "")) })
     }

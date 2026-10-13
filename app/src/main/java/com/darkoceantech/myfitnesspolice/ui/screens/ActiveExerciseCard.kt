@@ -96,11 +96,11 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                     if (history) ShieldMark(Modifier.size(42.dp))
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                         Text(entry.exercise.name, style = MaterialTheme.typography.titleLarge)
-                        Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+                        Text(entry.workoutExercise.equipmentSnapshot?.legacyDescription ?: entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
                     if (!history || historyMenuInBody) options()
                 }
-                EquipmentPositionSummary(entry.workoutExercise.equipmentPositions)
+                EquipmentConfigurationSummary(entry.equipmentConfiguration())
                 if (onNote != null || entry.workoutExercise.notes.isNotBlank()) Text(
                     entry.workoutExercise.notes.ifBlank { "Add an exercise note" },
                     Modifier.fillMaxWidth().testTag("exercise-note-${entry.workoutExercise.id}")

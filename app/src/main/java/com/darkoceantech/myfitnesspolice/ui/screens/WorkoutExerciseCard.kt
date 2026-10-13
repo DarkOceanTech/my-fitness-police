@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darkoceantech.myfitnesspolice.R
 import com.darkoceantech.myfitnesspolice.data.ExerciseWithSets
+import com.darkoceantech.myfitnesspolice.data.equipmentConfiguration
 import com.darkoceantech.myfitnesspolice.ui.theme.*
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -115,7 +116,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                         }
                     }
                 }
-                EquipmentPositionSummary(entry.workoutExercise.equipmentPositions)
+                EquipmentConfigurationSummary(entry.equipmentConfiguration())
                 Text(entry.workoutExercise.notes.ifBlank { "Add a note prior to workout" },
                     modifier = Modifier.fillMaxWidth().border(1.dp, PoliceColors.Border, RoundedCornerShape(10.dp))
                         .clickable(enabled = controlsEnabled, onClickLabel = "Edit note", onClick = onNote)

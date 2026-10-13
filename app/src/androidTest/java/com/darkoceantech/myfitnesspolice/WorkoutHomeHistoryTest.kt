@@ -34,7 +34,7 @@ class WorkoutHomeHistoryTest {
         try {
             compose.setContent { MyFitnessPoliceTheme { MyFitnessPoliceApp(repo) } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Launchpad").assertIsDisplayed()
+            compose.onNodeWithText("Daily Blotter").assertIsDisplayed()
             compose.onNodeWithText("MyFitnessPolice").assertIsDisplayed()
             val navigation = listOf("Dispatch", "Academy", "Field", "Reports", "Precinct")
             val positions = navigation.map { label ->
@@ -46,6 +46,8 @@ class WorkoutHomeHistoryTest {
             screenshot("dashboard-home")
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-value"))
             compose.onNodeWithTag("weekly-volume-value").assertIsDisplayed()
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-density-tab"))
+            compose.onNodeWithTag("weekly-density-tab").performClick()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-density-value"))
             compose.onNodeWithTag("weekly-density-value").assertIsDisplayed()
             screenshot("dashboard-scrolled")
@@ -124,8 +126,10 @@ class WorkoutHomeHistoryTest {
             compose.onNodeWithTag("exercise-catalog").assertIsDisplayed()
             screenshot("learning-tab")
             compose.onNode(hasText("Dispatch") and hasClickAction()).performClick()
-            compose.onNodeWithTag("weekly-Sets-value").performScrollTo()
-            compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("weekly-Sets-value") and hasText("0")).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-tab"))
+            compose.onNodeWithTag("weekly-volume-tab").performClick()
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-value"))
+            compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("weekly-volume-value") and hasText("0 Lbs-reps")).fetchSemanticsNodes().isNotEmpty() }
             runBlocking {
                 db.close()
                 db = open()

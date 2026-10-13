@@ -9,12 +9,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
         TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class,
-        StretchCatalogRow::class, StretchRoutineRow::class, StretchSessionRow::class, StretchPreferences::class],
-    version = 16,
+        Gym::class, Equipment::class, NamedEquipmentSetup::class, StretchCatalogRow::class, StretchRoutineRow::class, StretchSessionRow::class, StretchPreferences::class],
+    version = 17,
     exportSchema = true,
 )
-@androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class)
+@androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class, EquipmentConfigurationConverters::class)
 abstract class FitnessDatabase : RoomDatabase() {
+    abstract fun equipmentLibraryDao(): EquipmentLibraryDao
     abstract fun stretchDao(): StretchDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun workoutDao(): WorkoutDao
@@ -25,6 +26,32 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingScheduleDao(): TrainingScheduleDao
 
     companion object {
+        val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS gyms (id TEXT NOT NULL, name TEXT NOT NULL, isArchived INTEGER NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS equipment (id TEXT NOT NULL, type TEXT NOT NULL, name TEXT NOT NULL, makeModel TEXT NOT NULL, gymId TEXT, isArchived INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(gymId) REFERENCES gyms(id) ON UPDATE NO ACTION ON DELETE RESTRICT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_equipment_gymId ON equipment(gymId)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS equipment_setups (id TEXT NOT NULL, name TEXT NOT NULL, compatibleType TEXT NOT NULL, configuration TEXT NOT NULL, isArchived INTEGER NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("ALTER TABLE exercises ADD COLUMN equipmentDefault TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_exercises ADD COLUMN equipmentOverride TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE workout_exercises ADD COLUMN equipmentSnapshot TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE training_plan_exercises ADD COLUMN equipmentOverride TEXT DEFAULT NULL")
+                // Existing positions already have an owner. Never infer historical machine identities
+                // or backfill labels from a mutable catalog. Freeze only data actually recorded.
+                db.query("SELECT e.id, e.equipmentPositions, w.kind FROM workout_exercises e JOIN workouts w ON w.id=e.workoutId").use { rows ->
+                    while (rows.moveToNext()) {
+                        val positions = EquipmentPositionConverters().decode(rows.getString(1))
+                        val session = rows.getString(2) == "session"
+                        if (session || positions.isNotEmpty()) {
+                            val column = if (session) "equipmentSnapshot" else "equipmentOverride"
+                            db.execSQL("UPDATE workout_exercises SET " + column + "=? WHERE id=?", arrayOf(
+                                EquipmentConfigurationConverters().encode(EquipmentConfiguration(positions = positions)), rows.getString(0)))
+                        }
+                    }
+                }
+            }
+        }
+
         val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS stretch_catalog (id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(id))")
@@ -215,7 +242,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }

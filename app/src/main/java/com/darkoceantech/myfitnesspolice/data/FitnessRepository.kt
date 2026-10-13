@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
 
 class FitnessRepository(private val database: FitnessDatabase) {
+    val equipmentLibrary = EquipmentLibraryRepository(database)
     val stretches = StretchRepository(database)
     val sessionProgress = WorkoutSessionRepository(database)
     val trainingPlans = TrainingPlanRepository(database)
@@ -261,7 +262,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
                 source.orderedExercises().filter { it.sets.isNotEmpty() }.forEach { entry ->
                     val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id,
                         position = position++, sourceWorkoutId = source.workout.id, sourceWorkoutName = source.workout.displayName())
-                    database.workoutExerciseDao().insert(exercise)
+                    database.workoutExerciseDao().insert(equipmentLibrary.sessionCopy(exercise, entry.exercise))
                     entry.sets.sortedBy { it.position }.forEach { set ->
                         database.workoutSetDao().insert(set.copy(id = java.util.UUID.randomUUID().toString(),
                             workoutExerciseId = exercise.id, completedAt = null, actualReps = null, rpe = null,
@@ -270,7 +271,8 @@ class FitnessRepository(private val database: FitnessDatabase) {
                 }
             }
             is TrainingPlanItem.ExerciseItem -> {
-                val exercise = WorkoutExercise(workoutId = session.id, exerciseId = item.exerciseId, position = position++)
+                val exercise = equipmentLibrary.sessionCopy(WorkoutExercise(workoutId = session.id, exerciseId = item.exerciseId, position = position++,
+                    equipmentOverride = item.equipmentOverride), direct.getValue(item.exerciseId).exercise)
                 database.workoutExerciseDao().insert(exercise)
                 item.sets.forEachIndexed { setPosition, set ->
                     database.workoutSetDao().insert(WorkoutSet(workoutExerciseId = exercise.id, position = setPosition,
@@ -293,7 +295,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
         plan.orderedExercises().forEach { entry ->
             val exercise = entry.workoutExercise.copy(id = java.util.UUID.randomUUID().toString(), workoutId = session.id,
                 sourceWorkoutId = plan.workout.id, sourceWorkoutName = plan.workout.displayName())
-            database.workoutExerciseDao().insert(exercise)
+            database.workoutExerciseDao().insert(equipmentLibrary.sessionCopy(exercise, entry.exercise))
             entry.sets.forEach { set ->
                 database.workoutSetDao().insert(set.copy(id = java.util.UUID.randomUUID().toString(),
                     workoutExerciseId = exercise.id, completedAt = null, actualReps = null, activeMillis = 0, restMillis = 0))
@@ -325,7 +327,8 @@ class FitnessRepository(private val database: FitnessDatabase) {
         require(trimmed.all { it.name.isNotBlank() && it.position.isNotBlank() }) {
             "Enter both a name and position for each item, or remove the unfinished item."
         }
-        database.workoutExerciseDao().update(entry.workoutExercise.copy(equipmentPositions = trimmed))
+        val current = entry.equipmentConfiguration() ?: EquipmentConfiguration(legacyDescription = entry.exercise.equipment)
+        equipmentLibrary.saveEntry(workoutId, entryId, current.copy(positions = trimmed))
     }
 
     suspend fun updateExerciseNote(workoutId: String, entryId: String, note: String) = database.withTransaction {
@@ -355,8 +358,9 @@ class FitnessRepository(private val database: FitnessDatabase) {
         val details = requireNotNull(database.workoutDao().getDetails(workoutId))
         check(details.workout.finishedAt == null) { "This workout is already finished." }
         val position = (details.exercises.maxOfOrNull { it.workoutExercise.position } ?: -1) + 1
-        database.workoutExerciseDao().insert(WorkoutExercise(workoutId = workoutId,
-            exerciseId = exerciseId, position = position))
+        val exercise = requireNotNull(database.exerciseDao().get(exerciseId))
+        val entry = WorkoutExercise(workoutId = workoutId, exerciseId = exerciseId, position = position)
+        database.workoutExerciseDao().insert(if (details.workout.kind == "session") equipmentLibrary.sessionCopy(entry, exercise) else entry)
     }
 
     suspend fun saveSet(workoutId: String, entryId: String, setId: String?,
@@ -529,15 +533,15 @@ class FitnessRepository(private val database: FitnessDatabase) {
     fun observeWorkout(id: String) = database.workoutDao().observeDetails(id)
 
     suspend fun addExercise(name: String, equipment: String, description: String = "",
-        primaryMuscles: String = "", secondaryMuscles: String = "") {
+        primaryMuscles: String = "", secondaryMuscles: String = "", equipmentDefault: EquipmentConfiguration? = null) = database.withTransaction {
         require(name.isNotBlank()) { "Enter an exercise name." }
         database.exerciseDao().insert(Exercise(name = name.trim(), equipment = equipment.trim(),
             description = description.trim(), primaryMuscles = primaryMuscles.trim(),
-            secondaryMuscles = secondaryMuscles.trim()))
+            secondaryMuscles = secondaryMuscles.trim(), equipmentDefault = equipmentDefault?.let(equipmentLibrary::clean)))
     }
 
     suspend fun updateExercise(id: String, name: String, equipment: String, description: String,
-        primaryMuscles: String, secondaryMuscles: String) = database.withTransaction {
+        primaryMuscles: String, secondaryMuscles: String, equipmentDefault: EquipmentConfiguration? = null, updateEquipmentDefault: Boolean = false) = database.withTransaction {
         require(name.isNotBlank()) { "Enter an exercise name." }
         val original = requireNotNull(database.exerciseDao().get(id)) {
             "This exercise is no longer available. Close the form and refresh your exercise list."
@@ -545,6 +549,6 @@ class FitnessRepository(private val database: FitnessDatabase) {
         // Update the shared catalog row in place: plans and recorded sets retain their references.
         database.exerciseDao().update(original.copy(name = name.trim(), equipment = equipment.trim(),
             description = description.trim(), primaryMuscles = primaryMuscles.trim(),
-            secondaryMuscles = secondaryMuscles.trim()))
+            secondaryMuscles = secondaryMuscles.trim(), equipmentDefault = if (updateEquipmentDefault) equipmentDefault?.let(equipmentLibrary::clean) else original.equipmentDefault))
     }
 }

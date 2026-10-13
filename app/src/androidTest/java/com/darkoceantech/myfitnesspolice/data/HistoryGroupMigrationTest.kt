@@ -44,10 +44,10 @@ class HistoryGroupMigrationTest {
             old.version = 12
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16).build()
+            .addMigrations(FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17).build()
         var db = open()
         try {
-            assertEquals(16, db.openHelper.writableDatabase.version)
+            assertEquals(17, db.openHelper.writableDatabase.version)
             val migrated = listOf("week-one", "week-two").mapIndexed { index, id ->
                 val workout = db.workoutDao().getDetails(id)!!
                 val start = 1000L + index * 604800000L
@@ -61,7 +61,8 @@ class HistoryGroupMigrationTest {
                 assertEquals(start + 9000, workout.workout.finishedAt)
                 assertEquals(WorkoutExercise(id = "$id-entry", workoutId = id, exerciseId = "exercise", position = 0,
                     notes = "exercise note", equipmentPositions = listOf(EquipmentPosition("Seat", "4")),
-                    sourceWorkoutId = "plan", sourceWorkoutName = "Rows only snapshot"), workout.exercises.single().workoutExercise)
+                    sourceWorkoutId = "plan", sourceWorkoutName = "Rows only snapshot",
+                    equipmentSnapshot = EquipmentConfiguration(positions = listOf(EquipmentPosition("Seat", "4")))), workout.exercises.single().workoutExercise)
                 assertEquals(WorkoutSet(id = "$id-set", workoutExerciseId = "$id-entry", position = 0, reps = 10,
                     actualReps = 8, weightGrams = 12345, completedAt = start + 5000, isWarmup = true,
                     activeMillis = 5000, restMillis = 4000, notes = "set note", rpe = 7), workout.orderedSets().single())

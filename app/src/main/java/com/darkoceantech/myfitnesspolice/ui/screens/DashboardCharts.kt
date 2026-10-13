@@ -5,6 +5,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +19,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darkoceantech.myfitnesspolice.domain.dashboard.*
@@ -27,27 +33,52 @@ import kotlin.math.*
 private val chartColors = listOf(PoliceColors.LightBlue, PoliceColors.Red, PoliceColors.Blue, PoliceColors.Muted,
     Color(0xFF49CEEF), Color(0xFFB1A3F7), Color(0xFF547BCE), Color(0xFFFF8AA0), Color(0xFFDAE8FF),
     Color(0xFF456397), Color(0xFF85A9D6), Color(0xFF599DAD), Color(0xFFBDCADC))
-private fun seriesColor(index: Int) = chartColors[index % chartColors.size]
+internal fun seriesColor(index: Int) = chartColors[index % chartColors.size]
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DashboardChartCard(chart: DashboardChart, modifier: Modifier = Modifier, onInsights: () -> Unit) {
     var selectedPoint by remember(chart.id, chart.labels, chart.series) { mutableStateOf<Int?>(null) }
+    val weekly = chart.id.startsWith("weekly-")
+    val muscles = chart.id == "weekly-muscles"
+    val muscleWeek = selectedPoint ?: chart.labels.lastIndex
+    val headline = if (muscles) DashboardMetricsCalculator.number(chart.series.sumOf {
+        it.values.getOrNull(muscleWeek) ?: 0.0
+    }) + " working sets" else chart.headline
     Surface(modifier.fillMaxWidth().testTag(chart.id), shape = PoliceCardShape, color = PoliceColors.Card,
         border = BorderStroke(1.dp, PoliceColors.Border)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(chart.title, style = MaterialTheme.typography.titleMedium)
-            Text(chart.headline, style = StatTypography.copy(fontSize = 26.sp), modifier = Modifier.testTag("${chart.id}-value"))
-            TextButton(onClick = onInsights, modifier = Modifier.align(Alignment.End).testTag("${chart.id}-insights"),
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
-                Text("Insights", style = MaterialTheme.typography.labelMedium, color = PoliceColors.LightBlue)
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(22.dp).border(1.dp, PoliceColors.LightBlue, CircleShape), contentAlignment = Alignment.Center) {
-                    Text("i", color = PoliceColors.LightBlue)
+            if (weekly) {
+                Row(Modifier.fillMaxWidth().testTag("${chart.id}-header"), verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(chart.title, style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth().testTag("${chart.id}-title"), maxLines = 2,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 18.sp))
+                        Text(headline, style = StatTypography.copy(fontSize = 24.sp),
+                            modifier = Modifier.fillMaxWidth().testTag("${chart.id}-value"), maxLines = 2,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 24.sp))
+                    }
+                    TextButton(onClick = onInsights, modifier = Modifier.testTag("${chart.id}-insights"),
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                        Text("Insights", style = MaterialTheme.typography.labelMedium, color = PoliceColors.LightBlue)
+                    }
+                }
+            } else {
+                Text(chart.title, style = MaterialTheme.typography.titleMedium)
+                Text(chart.headline, style = StatTypography.copy(fontSize = 26.sp), modifier = Modifier.testTag("${chart.id}-value"))
+                TextButton(onClick = onInsights, modifier = Modifier.align(Alignment.End).testTag("${chart.id}-insights"),
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                    Text("Insights", style = MaterialTheme.typography.labelMedium, color = PoliceColors.LightBlue)
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.size(22.dp).border(1.dp, PoliceColors.LightBlue, CircleShape), contentAlignment = Alignment.Center) {
+                        Text("i", color = PoliceColors.LightBlue)
+                    }
                 }
             }
             SirenRule(Modifier.fillMaxWidth())
-            Text(chart.caption, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+            if (!weekly) Text(chart.caption, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted,
+                modifier = Modifier.testTag("${chart.id}-caption"))
             if (chart.emptyReason != null) Box(Modifier.fillMaxWidth().heightIn(min = 160.dp).testTag("${chart.id}-empty"),
                 contentAlignment = Alignment.Center) {
                 Text(chart.emptyReason, style = MaterialTheme.typography.bodyMedium, color = PoliceColors.Muted)
@@ -61,25 +92,57 @@ internal fun DashboardChartCard(chart: DashboardChart, modifier: Modifier = Modi
                         } }
                     }
                 }
-                Canvas(Modifier.fillMaxWidth().height(if (chart.kind == ChartKind.RADAR) 240.dp else 220.dp)
-                    .testTag("${chart.id}-chart").semantics { contentDescription = description }
-                    .pointerInput(chart) {
-                        if (chart.kind !in listOf(ChartKind.DONUT, ChartKind.GAUGE, ChartKind.RADAR)) detectTapGestures { point ->
-                            val left = chartAxisInset(chart).dp.toPx(); val right = if (chart.rightUnit == null) 12.dp.toPx() else 38.dp.toPx()
-                            val fraction = (point.x - left) / (size.width - left - right)
-                            val index = if (chart.kind in listOf(ChartKind.BAR, ChartKind.STACKED_BAR, ChartKind.COMBO))
-                                floor(fraction * chart.labels.size).toInt() else (fraction * (chart.labels.size - 1)).roundToInt()
-                            selectedPoint = index.coerceIn(0, (chart.labels.size - 1).coerceAtLeast(0))
+                BoxWithConstraints(Modifier.fillMaxWidth().height(if (chart.kind == ChartKind.RADAR) 240.dp else 220.dp)) {
+                    val cartesian = chart.kind !in listOf(ChartKind.DONUT, ChartKind.GAUGE, ChartKind.RADAR)
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val insets = remember(chart, density) { if (weekly && cartesian) weeklyCartesianInsets(chart, density) else null }
+                    Canvas(Modifier.fillMaxSize()
+                        .testTag("${chart.id}-chart").semantics { contentDescription = description }
+                        .pointerInput(chart) {
+                            if (cartesian) detectTapGestures { point ->
+                                val left = insets?.left ?: chartAxisInset(chart).dp.toPx()
+                                val right = insets?.right ?: if (chart.rightUnit == null) 12.dp.toPx() else 38.dp.toPx()
+                                val fraction = (point.x - left) / (size.width - left - right)
+                                val index = if (chart.kind in listOf(ChartKind.BAR, ChartKind.STACKED_BAR, ChartKind.COMBO))
+                                    floor(fraction * chart.labels.size).toInt() else (fraction * (chart.labels.size - 1)).roundToInt()
+                                selectedPoint = index.coerceIn(0, (chart.labels.size - 1).coerceAtLeast(0))
+                            }
+                        }) {
+                        when (chart.kind) {
+                            ChartKind.DONUT -> drawDonut(chart)
+                            ChartKind.GAUGE -> drawGauge(chart)
+                            ChartKind.RADAR -> drawRadar(chart)
+                            else -> drawCartesian(chart, if (muscles) muscleWeek else selectedPoint, insets)
                         }
-                    }) {
-                    when (chart.kind) {
-                        ChartKind.DONUT -> drawDonut(chart)
-                        ChartKind.GAUGE -> drawGauge(chart)
-                        ChartKind.RADAR -> drawRadar(chart)
-                        else -> drawCartesian(chart, selectedPoint)
+                    }
+                    if (insets != null) {
+                        val left = with(density) { insets.left.toDp() }
+                        val right = with(density) { insets.right.toDp() }
+                        Box(Modifier.absoluteOffset(x = left, y = 28.dp)
+                            .width((maxWidth - left - right).coerceAtLeast(0.dp)).height(162.dp)
+                            .testTag("${chart.id}-plot"))
+                        if (muscles && chart.labels.isNotEmpty()) {
+                            Row(Modifier.absoluteOffset(x = left, y = 28.dp)
+                                .width((maxWidth - left - right).coerceAtLeast(0.dp)).height(162.dp)) {
+                                chart.labels.forEachIndexed { index, week ->
+                                    Box(Modifier.weight(1f).fillMaxHeight()
+                                        .testTag("weekly-muscles-week-$index")
+                                        .semantics {
+                                            selected = index == muscleWeek
+                                            contentDescription = "Week of $week, " + DashboardMetricsCalculator.number(
+                                                chart.series.sumOf { it.values.getOrNull(index) ?: 0.0 }) + " sets"
+                                        }
+                                        .clickable(role = Role.Button) { selectedPoint = index })
+                                }
+                            }
+                        }
+                        WeeklyAxisLabel(chart.unit, left, insets.unitWidth, "${chart.id}-y-axis-label")
+                        chart.rightUnit?.let { unit ->
+                            WeeklyAxisLabel(unit, maxWidth - right, insets.rightUnitWidth, "${chart.id}-right-axis-label")
+                        }
                     }
                 }
-                selectedPoint?.let { index ->
+                selectedPoint?.takeUnless { muscles }?.let { index ->
                     Text(chart.labels.getOrNull(index).orEmpty() + " · " + chart.series.mapIndexed { i, series ->
                         series.name + ": " + (series.values.getOrNull(index)?.let { chart.displayNumber(it, i) } ?: "—") +
                             " " + if (i == 1 && chart.rightUnit != null) chart.rightUnit else chart.unit
@@ -87,7 +150,7 @@ internal fun DashboardChartCard(chart: DashboardChart, modifier: Modifier = Modi
                         modifier = Modifier.testTag("${chart.id}-point"))
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (muscles) WeeklyMuscleLegend(chart, muscleWeek) else FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 chart.series.forEachIndexed { index, series ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.size(8.dp).background(seriesColor(index), CircleShape))
@@ -102,6 +165,14 @@ internal fun DashboardChartCard(chart: DashboardChart, modifier: Modifier = Modi
                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
         }
     }
+}
+
+@Composable
+private fun WeeklyAxisLabel(unit: String, axis: Dp, widthPixels: Float, tag: String) {
+    val width = with(androidx.compose.ui.platform.LocalDensity.current) { widthPixels.toDp() }
+    Text(unit, modifier = Modifier.absoluteOffset(x = axis - width / 2).width(width).height(20.dp).testTag(tag),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, letterSpacing = 0.sp),
+        color = PoliceColors.Muted, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
 }
 
 private fun DrawScope.label(value: String, x: Float, y: Float, align: Paint.Align = Paint.Align.CENTER,
@@ -130,9 +201,38 @@ private fun chartAxisInset(chart: DashboardChart): Int = when (chart.unit) {
     else -> 38
 }
 
-private fun DrawScope.drawCartesian(chart: DashboardChart, selected: Int?) {
-    val left = chartAxisInset(chart).dp.toPx(); val right = size.width - if (chart.rightUnit == null) 12.dp.toPx() else 38.dp.toPx()
-    val top = 14.dp.toPx(); val bottom = size.height - 30.dp.toPx(); val height = bottom - top
+private data class WeeklyCartesianInsets(val left: Float, val right: Float, val unitWidth: Float, val rightUnitWidth: Float)
+
+private fun chartMaximum(chart: DashboardChart): Double {
+    val primary = if (chart.kind == ChartKind.STACKED_BAR)
+        chart.labels.indices.map { i -> chart.series.sumOf { it.values.getOrNull(i) ?: 0.0 } }
+    else chart.series.filterIndexed { index, _ -> chart.rightUnit == null || index == 0 }.flatMap { it.values.filterNotNull() }
+    return niceMax(maxOf(primary.maxOrNull() ?: 0.0, chart.reference ?: 0.0))
+}
+
+// Weekly plots reserve only the measured tick/axis-label space. In particular, volume
+// uses compact ticks rather than a fixed 80dp gutter, preserving the available plot width.
+private fun weeklyCartesianInsets(chart: DashboardChart, density: Density): WeeklyCartesianInsets = with(density) {
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 11.sp.toPx() }
+    fun width(text: String) = paint.measureText(text)
+    val maximum = chartMaximum(chart)
+    val primaryTicks = (0..4).maxOf { width(axisNumber(maximum * it / 4)) }
+    val unitWidth = width(chart.unit) + 4.dp.toPx()
+    val rightUnitWidth = chart.rightUnit?.let { width(it) + 4.dp.toPx() } ?: 0f
+    val left = maxOf(primaryTicks + 6.dp.toPx(), unitWidth / 2,
+        width(chart.labels.firstOrNull().orEmpty()) / 2 + 2.dp.toPx())
+    val secondMax = niceMax(chart.series.getOrNull(1)?.values?.filterNotNull()?.maxOrNull() ?: 0.0)
+    val secondaryTicks = if (chart.rightUnit == null) 0f else (0..4).maxOf { width(axisNumber(secondMax * it / 4)) }
+    val right = maxOf(if (chart.rightUnit == null) 12.dp.toPx() else secondaryTicks + 6.dp.toPx(),
+        rightUnitWidth / 2, width(chart.labels.lastOrNull().orEmpty()) / 2 + 2.dp.toPx())
+    WeeklyCartesianInsets(left, right, unitWidth, rightUnitWidth)
+}
+
+private fun DrawScope.drawCartesian(chart: DashboardChart, selected: Int?, weeklyInsets: WeeklyCartesianInsets? = null) {
+    val left = weeklyInsets?.left ?: chartAxisInset(chart).dp.toPx()
+    val right = size.width - (weeklyInsets?.right ?: if (chart.rightUnit == null) 12.dp.toPx() else 38.dp.toPx())
+    val top = if (weeklyInsets != null) 28.dp.toPx() else 14.dp.toPx()
+    val bottom = size.height - 30.dp.toPx(); val height = bottom - top
     val count = chart.labels.size.coerceAtLeast(1)
     val stacked = chart.kind == ChartKind.STACKED_BAR
     val primary = if (stacked) (0 until count).map { i -> chart.series.sumOf { it.values.getOrNull(i) ?: 0.0 } }
@@ -147,12 +247,14 @@ private fun DrawScope.drawCartesian(chart: DashboardChart, selected: Int?) {
         val ypos = bottom - height * tick / 4
         drawLine(PoliceColors.Border, Offset(left, ypos), Offset(right, ypos), 1.dp.toPx(),
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-        label(if (chart.unit in listOf("Lbs", "Lbs-reps")) chart.displayNumber(maximum * tick / 4) else axisNumber(maximum * tick / 4),
+        label(if (weeklyInsets == null && chart.unit in listOf("Lbs", "Lbs-reps")) chart.displayNumber(maximum * tick / 4) else axisNumber(maximum * tick / 4),
             left - 6.dp.toPx(), ypos + 4.dp.toPx(), Paint.Align.RIGHT)
         if (chart.rightUnit != null) label(axisNumber(secondMax * tick / 4), right + 6.dp.toPx(), ypos + 4.dp.toPx(), Paint.Align.LEFT)
     }
-    label(chart.unit, left, top - 2.dp.toPx(), Paint.Align.LEFT)
-    chart.rightUnit?.let { label(it, right, top - 2.dp.toPx(), Paint.Align.RIGHT) }
+    if (weeklyInsets == null) {
+        label(chart.unit, left, top - 2.dp.toPx(), Paint.Align.LEFT)
+        chart.rightUnit?.let { label(it, right, top - 2.dp.toPx(), Paint.Align.RIGHT) }
+    }
     val step = if (count <= 8) 1 else ((count - 1) / 4).coerceAtLeast(1)
     for (i in 0 until count) if (i % step == 0 || i == count - 1) {
         if (i != count - 1 || count <= 8 || (count - 1) % step >= step / 2 || (count - 1) % step == 0)

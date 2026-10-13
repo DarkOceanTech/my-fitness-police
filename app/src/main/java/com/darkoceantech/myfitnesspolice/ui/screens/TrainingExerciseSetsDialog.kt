@@ -37,13 +37,19 @@ private val DirectPlanSetRowsSaver = listSaver<List<DirectPlanSetRow>, String>(
 /** Local prescriptions are committed together on Save; dismissing never mutates the plan. */
 @Composable
 internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, planName: String, exercise: Exercise,
-    saving: Boolean, error: String?, onDismiss: () -> Unit, onSave: (List<TrainingPlanSet>) -> Unit) {
+    saving: Boolean, error: String?, onDismiss: () -> Unit, onSave: (List<TrainingPlanSet>) -> Unit,
+    onSaveWithEquipment: ((List<TrainingPlanSet>, EquipmentConfiguration?) -> Unit)? = null) {
     var rows by rememberSaveable(item.exerciseId, stateSaver = DirectPlanSetRowsSaver) {
         mutableStateOf(item.sets.map { DirectPlanSetRow(prescription = it) })
     }
+    var config by rememberSaveable(item.exerciseId, stateSaver = EquipmentConfigurationSaver) { mutableStateOf(item.equipmentOverride ?: exercise.equipmentDefault ?: EquipmentConfiguration()) }
+    var override by rememberSaveable(item.exerciseId) { mutableStateOf(item.equipmentOverride != null) }
+    var setupEditor by rememberSaveable { mutableStateOf(false) }
+    var setupError by remember { mutableStateOf<String?>(null) }
+    val equipmentDirty = (if (override) config else null) != item.equipmentOverride
     var dragging by remember { mutableStateOf(false) }
     val prescriptions = rows.map { it.prescription }
-    val dirty = prescriptions != item.sets
+    val dirty = prescriptions != item.sets || equipmentDirty
     val enabled = !saving && !dragging
     val entryId = "training-direct-${item.exerciseId}"
     val entry = ExerciseWithSets(WorkoutExercise(entryId, "training-local", exercise.id, 0), exercise,
@@ -62,7 +68,7 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
     WorkoutEditorDialog("Edit exercise sets", "training-exercise-sets", !saving, onDismiss, fullScreen = true, footer = {
         PoliceOutlinedButton(onClick = onDismiss, enabled = enabled, modifier = Modifier.weight(1f)
             .testTag("cancel-training-exercise-sets")) { Text("Cancel") }
-        PoliceButton(onClick = { onSave(prescriptions) }, enabled = enabled && dirty && prescriptions.isNotEmpty(),
+        PoliceButton(onClick = { if (onSaveWithEquipment != null) onSaveWithEquipment(prescriptions, if (override) config else null) else onSave(prescriptions) }, enabled = enabled && dirty && prescriptions.isNotEmpty(),
             modifier = Modifier.weight(1f).testTag("save-training-exercise-sets")) { Text(if (saving) "Saving…" else "Save") }
     }) {
         val listState = rememberLazyListState()
@@ -90,6 +96,8 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
                                         style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                                 }
                             }
+                            EquipmentConfigurationSummary(if (override) config else exercise.equipmentDefault)
+                            if (LocalEquipmentLibraryModel.current != null) OutlinedButton(onClick = { setupEditor = true }, enabled = enabled) { Text("Edit equipment setup") }
                             ReorderableSetTable(entry, !saving, SessionAction(saving = saving, error = error), listState, viewport,
                                 onDragState = { dragging = it }, onReorder = { ids -> rows = ids.map { id -> rows.single { it.id == id } } },
                                 onDeleteSet = { id -> rows = rows.filterNot { it.id == id } }, onChange = ::change)
@@ -108,6 +116,12 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
             if (error != null) item(key = "error") { Text(error, color = PoliceColors.Error, style = MaterialTheme.typography.bodySmall) }
         }
     }
+    if (setupEditor) EquipmentConfigurationEditor(if (override) config else exercise.equipmentDefault, "Plan exercise equipment", onDismiss = { setupEditor = false },
+        action = SessionAction(error = setupError), allowNamedSetup = false, onSave = { selection, _, _, _ ->
+            val positions = selection?.positions.orEmpty().map { EquipmentPosition(it.name.trim(), it.position.trim()) }.filterNot { it.name.isBlank() && it.position.isBlank() }
+            if (positions.any { it.name.isBlank() || it.position.isBlank() }) setupError = "Enter both name and position, or remove the unfinished row."
+            else { override = selection != null; config = selection?.copy(positions = positions) ?: EquipmentConfiguration(); setupError = null; setupEditor = false }
+        })
 }
 
 @Composable

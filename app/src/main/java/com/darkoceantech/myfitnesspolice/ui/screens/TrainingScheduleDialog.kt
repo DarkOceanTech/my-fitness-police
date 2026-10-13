@@ -43,7 +43,7 @@ internal fun TrainingScheduleDialog(planId: String, name: String, dates: List<St
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("training-schedule-content"),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(name, style = MaterialTheme.typography.headlineSmall)
-            Text("Tap dates to add or remove this plan. Saved dates appear in Launchpad when they are within its 10-day window.",
+            Text("Tap dates to add or remove this plan. Saved dates appear in Daily Blotter; swipe to their calendar week.",
                 style = MaterialTheme.typography.bodyMedium, color = PoliceColors.Muted)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { monthText = month.minusMonths(1).toString() }, enabled = !action.saving) {

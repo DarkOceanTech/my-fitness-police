@@ -17,10 +17,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.darkoceantech.myfitnesspolice.ui.theme.*
 import kotlin.math.roundToInt
+import java.time.DayOfWeek
 
-/** Interactive preview only: no settings are written to storage or applied to sessions. */
+/** Week start is persisted by the app; the remaining controls are interactive previews. */
 @Composable
-fun DemoSettingsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+fun DemoSettingsScreen(modifier: Modifier = Modifier, onBack: () -> Unit,
+    weekStartsOn: DayOfWeek? = null, onWeekStartChanged: (DayOfWeek) -> Unit = {}) {
     var name by rememberSaveable { mutableStateOf("") }
     var goalNote by rememberSaveable { mutableStateOf("") }
     var goal by rememberSaveable { mutableStateOf("Build strength") }
@@ -35,8 +37,8 @@ fun DemoSettingsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
         SectionPageHeader("Settings", onBack = onBack, backLabel = "Back to Dispatch")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding().padding(20.dp)
             .testTag("settings-scroll"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("DEMO PREVIEW", color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelLarge)
-            Text("Try the controls. These examples won’t change your workouts or save preferences.",
+            Text("HQ SETTINGS", color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelLarge)
+            Text("Week starts on is saved and updates Daily Blotter and weekly reports. The other controls are demo previews.",
                 style = MaterialTheme.typography.bodyMedium, color = PoliceColors.Muted)
             SettingsSection("Officer profile") {
                 OutlinedTextField(name, { name = it }, label = { Text("Display name") },
@@ -59,7 +61,12 @@ fun DemoSettingsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                     }
                 }
                 DemoSettingsDropdown("Weight units", units, listOf("Pounds (lbs)", "Kilograms (kg)")) { units = it }
-                DemoSettingsDropdown("Week starts on", weekStart, listOf("Monday", "Sunday")) { weekStart = it }
+                DemoSettingsDropdown("Week starts on",
+                    weekStartsOn?.let { if (it == DayOfWeek.SUNDAY) "Sunday" else "Monday" } ?: weekStart,
+                    listOf("Monday", "Sunday"), tag = "settings-week-start") {
+                    weekStart = it
+                    onWeekStartChanged(if (it == "Sunday") DayOfWeek.SUNDAY else DayOfWeek.MONDAY)
+                }
                 Text("Default rest · ${rest.roundToInt()} seconds", style = MaterialTheme.typography.bodyMedium)
                 Slider(rest, { rest = it }, valueRange = 30f..180f, steps = 9, modifier = Modifier.testTag("settings-rest"))
             }
@@ -85,12 +92,12 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
 }
 
 @Composable
-private fun DemoSettingsDropdown(label: String, value: String, options: List<String>, onSelect: (String) -> Unit) {
+private fun DemoSettingsDropdown(label: String, value: String, options: List<String>, tag: String = "", onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = PoliceColors.Muted)
         Box {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().testTag(tag)) {
                 Text(value, Modifier.weight(1f)); Text("▾")
             }
             DropdownMenu(expanded, onDismissRequest = { expanded = false }) {

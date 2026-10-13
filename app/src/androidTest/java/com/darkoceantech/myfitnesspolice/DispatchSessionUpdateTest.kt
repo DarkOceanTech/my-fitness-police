@@ -20,7 +20,7 @@ class DispatchSessionUpdateTest {
         try {
             compose.setContent { MyFitnessPoliceApp(FitnessRepository(db)) }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("dashboard-launchpad").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Launchpad").assertIsDisplayed()
+            compose.onNodeWithText("Daily Blotter").assertIsDisplayed()
             compose.onNodeWithText("WEEKLY PROGRESS").assertDoesNotExist()
             screenshot("dispatch")
             compose.onNodeWithTag("open-settings").performClick()

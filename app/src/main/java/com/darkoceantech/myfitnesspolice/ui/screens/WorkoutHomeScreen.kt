@@ -92,7 +92,7 @@ fun WorkoutHomeRoute(model: SessionViewModel, exercisesModel: ExercisesViewModel
     else if (logger) WorkoutBuilderScreen(model, exercisesModel, modifier, onBack = { back() }, onSaved = { logger = false })
     else if ((trainingEditor || trainingPlanId != null) && (state.loading || state.failed || (trainingPlanId != null && selectedTraining == null))) {
         Column(modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(onClick = { trainingEditor = false; back() }) { Text(if (fromLaunchpad) "Back to Launchpad" else "Back to Plan") }
+            TextButton(onClick = { trainingEditor = false; back() }) { Text(if (fromLaunchpad) "Back to Daily Blotter" else "Back to Plan") }
             if (state.loading) CircularProgressIndicator()
             else if (state.failed) { Text("Could not load training plans."); TextButton(onClick = model::retry) { Text("Retry") } }
             else Text("This training plan is no longer available.")

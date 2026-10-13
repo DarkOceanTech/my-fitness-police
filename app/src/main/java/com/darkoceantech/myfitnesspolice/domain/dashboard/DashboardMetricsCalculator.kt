@@ -3,16 +3,16 @@ package com.darkoceantech.myfitnesspolice.domain.dashboard
 import java.time.*
 import com.darkoceantech.myfitnesspolice.domain.formatting.formatWeight
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 /** Pure, deterministic aggregations. All dates use local calendar boundaries, including DST. */
 class DashboardMetricsCalculator {
     fun calculate(input: DashboardInput, now: Long, selected: LocalDate, dailyLift: String? = null,
-        monthlyLift: String? = null, zone: ZoneId = ZoneId.systemDefault()): DashboardReport {
+        monthlyLift: String? = null, zone: ZoneId = ZoneId.systemDefault(),
+        weekStartsOn: DayOfWeek = DayOfWeek.MONDAY): DashboardReport {
         fun date(millis: Long) = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
         val today = date(now)
-        val day = selected.coerceIn(today.minusDays(10), today.plusDays(10))
+        val day = selected
         val sessions = input.sessions.filter { it.startedAt <= now }.map { it.copy(sets = it.sets.filter { set -> set.completedAt <= now }) }
         val sets = sessions.flatMap { session -> session.sets.map { TimedSet(session, it, date(session.startedAt)) } }
             .sortedWith(compareBy<TimedSet> { it.set.completedAt }.thenBy { it.session.startedAt }.thenBy { it.set.order }.thenBy { it.set.id })
@@ -24,9 +24,9 @@ class DashboardMetricsCalculator {
         fun pending(d: LocalDate) = scheduled(d).filter { plan ->
             recorded(d).none { it.planId == plan.id && it.sets.isNotEmpty() }
         }
-        val calendar = (-10L..10L).map { offset -> today.plusDays(offset).let {
+        val calendar = calendarWeek(day, weekStartsOn).map {
             CalendarDay(it, pending(it).isNotEmpty(), recorded(it).isNotEmpty())
-        } }
+        }
         val launches = buildList {
             pending(day).forEach { add(DayLaunchItem(it.id, it.name, "Scheduled routine · ${it.sets} sets · ${it.reps} planned reps", false)) }
             recorded(day).groupBy { it.groupId ?: it.id }.values.sortedBy { group -> group.minOf { it.startedAt } }.forEach { group ->
@@ -35,23 +35,38 @@ class DashboardMetricsCalculator {
                     "Completed plan · ${performed.size} sets · ${performed.sumOf { it.reps.toLong() }} reps", true))
             }
         }
-        val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        val weekDates = (7 downTo 0).map { monday.minusWeeks(it.toLong()) }
-        val weeks = weekDates.map { start -> sets.filter { it.date >= start && it.date < start.plusWeeks(1) && it.date <= day } }
+        val weekStart = startOfWeek(day, weekStartsOn)
+        val weekDates = (7 downTo 0).map { weekStart.minusWeeks(it.toLong()) }
+        val weeklySets = sets.filter(::validWeeklyRecord)
+        val weeks = weekDates.map { start -> weeklySets.filter { it.date >= start && it.date < start.plusWeeks(1) && it.date <= day } }
         val labels = weekDates.map { it.format(DateTimeFormatter.ofPattern("M/d")) }
         val muscles = weeks.flatten().filter { !it.set.warmup }.map { it.set.muscle }.distinct().sorted()
         val weekActive = weeks.map { list -> list.sumOf { it.set.activeMillis } / 60000.0 }
         val weekBreak = weeks.map { list -> list.sumOf { it.set.breakMillis } / 60000.0 }
-        // A prior-day estimate prevents a set from inflating its own reference ceiling.
+        // Keep the existing daily reference separate from the weekly all-history contract.
         val exerciseHistory = sets.groupBy { it.set.exerciseId }
         val baselineCache = mutableMapOf<Pair<String, LocalDate>, Double?>()
         fun baseline(record: TimedSet): Double? = baselineCache.getOrPut(record.set.exerciseId to record.date) { exerciseHistory[record.set.exerciseId].orEmpty().asSequence().filter {
             it.set.exerciseId == record.set.exerciseId && it.date < record.date && it.date >= record.date.minusDays(90) && !it.set.warmup
         }.mapNotNull { epley(it.set.pounds, it.set.reps) }.maxOrNull() }
+        // Build references before restricting chart dates. Sets sharing a completion timestamp
+        // are evaluated together so neither the current set nor a simultaneous set is a baseline.
+        val weeklyReferences = mutableMapOf<Pair<String, String>, Double?>()
+        val bestEarlierEstimate = mutableMapOf<String, Double>()
+        weeklySets.groupBy { it.set.completedAt }.values.forEach { simultaneous ->
+            simultaneous.forEach { record ->
+                weeklyReferences[record.session.id to record.set.id] = bestEarlierEstimate[record.set.exerciseId]
+            }
+            simultaneous.filter { !it.set.warmup }.forEach { record ->
+                epley(record.set.pounds, record.set.reps)?.let { estimate ->
+                    bestEarlierEstimate[record.set.exerciseId] = maxOf(bestEarlierEstimate[record.set.exerciseId] ?: estimate, estimate)
+                }
+            }
+        }
         fun intensity(records: List<TimedSet>): List<Double> {
             val counts = MutableList(4) { 0.0 }
             records.filter { !it.set.warmup }.forEach { record ->
-                val ref = baseline(record)
+                val ref = weeklyReferences[record.session.id to record.set.id]
                 val ratio = if (ref != null && ref > 0 && record.set.pounds > 0) record.set.pounds / ref else null
                 counts[when { ratio == null -> 3; ratio < .60 -> 0; ratio <= .85 -> 1; else -> 2 }]++
             }
@@ -140,9 +155,14 @@ class DashboardMetricsCalculator {
                 listOf("Strength 1–5", "Hypertrophy 6–12", "Endurance 13+"), listOf(series("Working sets", ranges)), "sets",
                 empty = if (ranges.sum() == 0.0) "No completed working sets for this month." else null)
         )
-        return DashboardReport(today, day, calendar, launches, weekly, daily, monthly, dailyChoices, monthlyChoices, dailyId, monthlyId)
+        return DashboardReport(today, day, calendar, launches, weekly, daily, monthly, dailyChoices, monthlyChoices, dailyId, monthlyId, weekStartsOn)
     }
     private data class TimedSet(val session: DashboardSession, val set: DashboardSet, val date: LocalDate)
+    private fun validWeeklyRecord(record: TimedSet) = record.set.run {
+        completedAt > 0 && completedAt >= record.session.startedAt && exerciseId.isNotBlank() &&
+            pounds.isFinite() && pounds >= 0 && reps >= 0 && (pounds * reps).isFinite() &&
+            activeMillis >= 0 && breakMillis >= 0
+    }
     private fun choices(rows: List<TimedSet>) = rows.asReversed().distinctBy { it.set.exerciseId }.map { LiftChoice(it.set.exerciseId, it.set.exerciseName) }
     private fun chart(id: String, title: String, headline: String, caption: String, kind: ChartKind, labels: List<String>,
         series: List<ChartSeries>, unit: String, right: String? = null, empty: String? = null, reference: Double? = null) =
@@ -150,7 +170,8 @@ class DashboardMetricsCalculator {
             empty ?: if (series.isEmpty() || series.all { s -> s.values.all { it == null } }) "No recorded data in this period." else null, reference)
     private fun series(name: String, values: List<Double>) = ChartSeries(name, values)
     companion object {
-        fun epley(pounds: Double, reps: Int): Double? = if (pounds <= 0 || reps !in 1..10) null else if (reps == 1) pounds else pounds * (1 + reps / 30.0)
+        fun epley(pounds: Double, reps: Int): Double? = if (!pounds.isFinite() || pounds <= 0 || reps !in 1..10) null
+            else (if (reps == 1) pounds else pounds * (1 + reps / 30.0)).takeIf { it.isFinite() }
         fun number(value: Double): String = String.format(Locale.getDefault(), if (value % 1.0 == 0.0) "%,.0f" else "%,.1f", value)
     }
 }

@@ -80,12 +80,14 @@ class HistoryViewModel(repository: FitnessRepository) :
 class WorkoutViewModel(repository: FitnessRepository) :
     ListViewModel<Workout>(repository::observeUnfinished)
 
-class FitnessViewModelFactory(private val repository: FitnessRepository) : ViewModelProvider.Factory {
+class FitnessViewModelFactory(private val repository: FitnessRepository,
+    private val settings: AppSettingsRepository? = null) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
+        EquipmentLibraryViewModel::class.java -> EquipmentLibraryViewModel(repository)
         SessionViewModel::class.java -> SessionViewModel(repository)
         StretchViewModel::class.java -> StretchViewModel(repository.stretches)
-        DashboardViewModel::class.java -> DashboardViewModel(com.darkoceantech.myfitnesspolice.data.DashboardRepository(repository))
+        DashboardViewModel::class.java -> DashboardViewModel(com.darkoceantech.myfitnesspolice.data.DashboardRepository(repository), settings)
         ExercisesViewModel::class.java -> ExercisesViewModel(repository)
         HistoryViewModel::class.java -> HistoryViewModel(repository)
         WorkoutViewModel::class.java -> WorkoutViewModel(repository)

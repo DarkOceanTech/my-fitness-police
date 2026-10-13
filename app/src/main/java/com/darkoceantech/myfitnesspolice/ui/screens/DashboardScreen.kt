@@ -19,8 +19,6 @@ import com.darkoceantech.myfitnesspolice.domain.dashboard.*
 import com.darkoceantech.myfitnesspolice.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
-import java.time.DayOfWeek
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.semantics.semantics
@@ -37,7 +35,7 @@ fun DashboardRoute(model: DashboardViewModel, modifier: Modifier = Modifier, onS
     LaunchedEffect(selectedDay) { model.selectDay(selectedDay) }
     LaunchedEffect(dailyLift) { dailyLift?.let(model::selectDailyLift) }
     LaunchedEffect(monthlyLift) { monthlyLift?.let(model::selectMonthlyLift) }
-    DashboardScreen(state, modifier, onSettings, onDaySelected = onDayChanged,
+    DashboardScreen(state, modifier, onSettings, onDaySelected = { model.selectDay(it); onDayChanged(it) },
         onDailyLift = { dailyLift = it }, onMonthlyLift = { monthlyLift = it }, onPlan = onPlan, onLog = onLog, onRetry = model::retry)
 }
 
@@ -73,13 +71,13 @@ fun DashboardScreen(state: DashboardUiState, modifier: Modifier = Modifier, onSe
             PoliceButton(onClick = onRetry) { Text("Retry") }
         }
         if (report != null) {
-            item(key = "launchpad") { LaunchpadCalendarSection(report, onDaySelected) }
-            if (report.launches.isEmpty()) item(key = "launchpad-empty") { LaunchpadEmptyCard() }
+            item(key = "launchpad") { DailyBlotterCalendarSection(report, onDaySelected) }
+            if (report.launches.isEmpty()) item(key = "launchpad-empty") { DailyBlotterEmptyCard() }
             else items(report.launches, key = { "launch-${it.recorded}-${it.id}" }) { launch ->
-                LaunchpadRoutineCard(launch, onPlan, onLog)
+                DailyBlotterRoutineCard(launch, onPlan, onLog)
             }
             item(key = "weekly-heading") {
-                DashboardSectionHeading("Weekly Metrics", "This week · " + report.selectedDay.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                DashboardSectionHeading("Weekly Metrics", "This week · " + report.weekStart
                     .format(DateTimeFormatter.ofPattern("MMM d")) + " · last 8 weeks", "dashboard-weekly")
             }
             item(key = "weekly-carousel") { DashboardChartCarousel("weekly", report.weekly, listOf("Volume", "Muscles", "Density", "Intensity")) { insightId = it } }

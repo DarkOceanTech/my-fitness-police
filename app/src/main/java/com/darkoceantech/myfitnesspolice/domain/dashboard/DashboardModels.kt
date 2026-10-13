@@ -1,6 +1,7 @@
 package com.darkoceantech.myfitnesspolice.domain.dashboard
 
 import java.time.LocalDate
+import java.time.DayOfWeek
 
 data class DashboardSet(val id: String, val exerciseId: String, val exerciseName: String,
     val muscle: String, val order: Int, val completedAt: Long, val reps: Int, val pounds: Double,
@@ -23,4 +24,6 @@ data class LiftChoice(val id: String, val name: String)
 data class DashboardReport(val today: LocalDate, val selectedDay: LocalDate, val calendar: List<CalendarDay>,
     val launches: List<DayLaunchItem>, val weekly: List<DashboardChart>, val daily: List<DashboardChart>,
     val monthly: List<DashboardChart>, val dailyLifts: List<LiftChoice>, val monthlyLifts: List<LiftChoice>,
-    val dailyLiftId: String?, val monthlyLiftId: String?)
+    val dailyLiftId: String?, val monthlyLiftId: String?, val weekStartsOn: DayOfWeek = DayOfWeek.MONDAY) {
+    val weekStart: LocalDate get() = startOfWeek(selectedDay, weekStartsOn)
+}

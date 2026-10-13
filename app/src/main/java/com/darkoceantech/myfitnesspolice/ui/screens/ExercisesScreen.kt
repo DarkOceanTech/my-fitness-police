@@ -2,6 +2,7 @@ package com.darkoceantech.myfitnesspolice.ui.screens
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -166,7 +167,8 @@ private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onS
                 color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelMedium)
             Text(exercise.mainMuscleGroup().label.uppercase(java.util.Locale.ROOT),
                 color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
-            ExerciseDetailField("EQUIPMENT", exercise.equipment.ifBlank { "Not specified" })
+            ExerciseDetailField("COMPATIBLE EQUIPMENT", exercise.equipment.ifBlank { "Not specified" })
+            EquipmentConfigurationSummary(exercise.equipmentDefault)
             ExerciseDetailField("PRIMARY MUSCLES", exercise.primaryMuscles.ifBlank { "Not specified" })
             if (expanded) {
                 HorizontalDivider(color = PoliceColors.Border)
@@ -257,8 +259,22 @@ private fun ExerciseDialogFrame(
 }
 
 @Composable
-private fun ExerciseFormDialog(form: ExerciseFormState, onDismiss: () -> Unit, onEdit: () -> Unit,
+private fun ExerciseFormDialog(formState: ExerciseFormState, onDismiss: () -> Unit, onEdit: () -> Unit,
     exercise: Exercise? = null, onSave: (String, String, String, String, String) -> Unit) {
+    val equipmentModel = LocalEquipmentLibraryModel.current
+    val libraryAction = equipmentModel?.action?.collectAsStateWithLifecycle()?.value
+    val form = if (libraryAction != null) ExerciseFormState(libraryAction.saving, libraryAction.error) else formState
+    var configuration by rememberSaveable(exercise?.id, stateSaver = EquipmentConfigurationSaver) {
+        mutableStateOf(exercise?.equipmentDefault ?: com.darkoceantech.myfitnesspolice.data.EquipmentConfiguration())
+    }
+    var configured by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.equipmentDefault != null) }
+    val revision = remember { libraryAction?.revision ?: 0 }
+    LaunchedEffect(libraryAction?.revision) {
+        if (libraryAction != null && libraryAction.revision > revision && libraryAction.completedAction == "exercise") {
+            equipmentModel?.reset(); onDismiss()
+        }
+    }
+
     var name by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.name.orEmpty()) }
     var equipment by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.equipment.orEmpty()) }
     var description by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.description.orEmpty()) }
@@ -268,7 +284,10 @@ private fun ExerciseFormDialog(form: ExerciseFormState, onDismiss: () -> Unit, o
         screenTag = "exercise-editor-screen", backLabel = "Close exercise form", footer = {
         TextButton(onClick = onDismiss, enabled = !form.saving) { Text("Cancel") }
         Spacer(Modifier.width(12.dp))
-        PoliceButton(onClick = { onSave(name, equipment, description, primary, secondary) }, enabled = !form.saving,
+        PoliceButton(onClick = {
+            if (equipmentModel == null) onSave(name, equipment, description, primary, secondary)
+            else equipmentModel.saveExercise(exercise, name, equipment, description, primary, secondary, if (configured) configuration else null)
+        }, enabled = !form.saving,
             modifier = Modifier.testTag("save-exercise")) {
             Text(if (form.saving) "Saving…" else "Save")
         }
@@ -282,9 +301,15 @@ private fun ExerciseFormDialog(form: ExerciseFormState, onDismiss: () -> Unit, o
                 enabled = !form.saving, modifier = Modifier.fillMaxWidth().testTag("exercise-name"))
             OutlinedTextField(description, { description = it; onEdit() }, label = { Text("Description") }, minLines = 2, maxLines = 4,
                 enabled = !form.saving, modifier = Modifier.fillMaxWidth().testTag("exercise-description"))
-            OutlinedTextField(equipment, { equipment = it; onEdit() }, label = { Text("Equipment") }, maxLines = 3,
+            OutlinedTextField(equipment, { equipment = it; onEdit() }, label = { Text("Equipment requirements") }, maxLines = 3,
                 placeholder = { Text("Bodyweight; bench; dumbbell") }, enabled = !form.saving,
                 modifier = Modifier.fillMaxWidth().testTag("exercise-equipment"))
+            if (equipmentModel != null) {
+                Text("Default equipment & setup (optional)", style = MaterialTheme.typography.titleSmall, color = PoliceColors.LightBlue)
+                EquipmentConfigurationFields(configuration, !form.saving) { configuration = it; configured = true }
+                EquipmentPositionFields(configuration, !form.saving) { configuration = it; configured = true }
+                TextButton(onClick = { configuration = com.darkoceantech.myfitnesspolice.data.EquipmentConfiguration(); configured = true }, enabled = !form.saving) { Text("Use no equipment / setup") }
+            }
             OutlinedTextField(primary, { primary = it; onEdit() }, label = { Text("Primary muscles") }, maxLines = 4,
                 placeholder = { Text("Latissimus dorsi; trapezius (middle part)") }, enabled = !form.saving,
                 modifier = Modifier.fillMaxWidth().testTag("exercise-primary"))

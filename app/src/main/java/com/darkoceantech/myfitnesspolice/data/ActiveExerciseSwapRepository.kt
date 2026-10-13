@@ -47,7 +47,8 @@ class ActiveExerciseSwapRepository(private val database: FitnessDatabase) {
         }
         // Validate before deleting. Keep the exercise position and source-workout provenance.
         existingSets.forEach { database.workoutSetDao().delete(it.id) }
-        database.workoutExerciseDao().update(entry.workoutExercise.copy(exerciseId = exerciseId, notes = "", equipmentPositions = emptyList()))
+        database.workoutExerciseDao().update(EquipmentLibraryRepository(database).sessionCopy(entry.workoutExercise.copy(
+            exerciseId = exerciseId, notes = "", equipmentPositions = emptyList(), equipmentOverride = null, equipmentSnapshot = null), replacement))
         updatedSets.forEach { database.workoutSetDao().insert(it) }
         if (existingSets.any { it.id == progress.currentSetId }) {
             database.sessionStateDao().save(progress.copy(currentSetId = updatedSets.first().id))

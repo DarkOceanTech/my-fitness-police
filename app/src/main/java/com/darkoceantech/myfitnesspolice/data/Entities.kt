@@ -16,6 +16,7 @@ data class Exercise(
     // Semicolon-separated readable lists, consistent with the prototype's text metadata.
     @androidx.room.ColumnInfo(defaultValue = "''") val primaryMuscles: String = "",
     @androidx.room.ColumnInfo(defaultValue = "''") val secondaryMuscles: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val equipmentDefault: EquipmentConfiguration? = null,
 ) {
     init { require(name.isNotBlank()) { "Exercise name is required" } }
 }
@@ -62,6 +63,8 @@ data class WorkoutExercise(
     // Snapshot provenance survives changes to or deletion of the saved source workout.
     @androidx.room.ColumnInfo(defaultValue = "NULL") val sourceWorkoutId: String? = null,
     @androidx.room.ColumnInfo(defaultValue = "''") val sourceWorkoutName: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val equipmentOverride: EquipmentConfiguration? = null,
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val equipmentSnapshot: EquipmentConfiguration? = null,
 ) {
     init { require(position >= 0) }
 }

@@ -3,7 +3,6 @@ package com.darkoceantech.myfitnesspolice
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
-import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import com.darkoceantech.myfitnesspolice.data.*
 import kotlinx.coroutines.flow.first
@@ -18,6 +17,8 @@ import java.time.YearMonth
 
 class LaunchpadScheduleUiTest {
     @get:Rule val compose = createComposeRule()
+    private var keyboard: androidx.compose.ui.platform.SoftwareKeyboardController? = null
+    private var hostActivity: androidx.activity.ComponentActivity? = null
     @Before fun freezeRequestedOrientation() {
         val expected = InstrumentationRegistry.getArguments().getString("expectedOrientation") ?: return
         assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(
@@ -28,7 +29,7 @@ class LaunchpadScheduleUiTest {
         InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(android.app.UiAutomation.ROTATION_UNFREEZE)
     }
 
-    @Test fun scheduleCancelSaveAndLaunchpadBackPreserveSelectedDay() {
+    @Test fun scheduleCancelSaveAndDailyBlotterBackPreserveSelectedDay() {
         val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, FitnessDatabase::class.java).build()
         val repo = FitnessRepository(db)
         val today = LocalDate.now()
@@ -39,7 +40,11 @@ class LaunchpadScheduleUiTest {
             db.trainingPlanDao().insertExerciseMembers(listOf(TrainingPlanExercise("p", "e", 0)))
         }
         try {
-            compose.setContent { MyFitnessPoliceApp(repo) }
+            compose.setContent {
+                keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                hostActivity = androidx.compose.ui.platform.LocalContext.current as androidx.activity.ComponentActivity
+                MyFitnessPoliceApp(repo)
+            }
             waitTag("dashboard-launchpad")
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-empty"))
             compose.onNodeWithTag("launch-p").assertDoesNotExist()
@@ -80,13 +85,16 @@ class LaunchpadScheduleUiTest {
             waitTag("training-plan-editor")
             compose.onNodeWithTag("training-plan-day").assertDoesNotExist()
             compose.onNodeWithTag("training-plan-name").performTextReplacement("Back patrol updated")
-            Espresso.closeSoftKeyboard()
+            compose.runOnIdle { keyboard?.hide() }
             compose.onNodeWithTag("save-training-plan").performClick()
             waitTag("training-plan-detail")
             assertEquals("Monday", runBlocking { db.trainingPlanDao().get("p")!!.plan.dayOfWeek })
             compose.onNode(hasText("Dispatch") and hasClickAction()).performClick()
             waitTag("dashboard-launchpad")
-            compose.onNodeWithTag("launchpad-calendar").performScrollToIndex(12)
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-calendar"))
+            if (!compose.onNodeWithTag("calendar-$future").isDisplayed()) {
+                compose.onNodeWithTag("daily-blotter-weeks").performTouchInput { swipeLeft() }
+            }
             compose.onNodeWithTag("calendar-$future").performClick()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-p"))
             compose.onNodeWithTag("launch-p").performClick()
@@ -99,16 +107,16 @@ class LaunchpadScheduleUiTest {
             compose.waitUntil(8000) { compose.onAllNodesWithTag("training-schedule-dialog").fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf(today.toString(), future.toString(), another.toString()),
                 runBlocking { repo.trainingSchedule.observeAll().first().map { it.scheduledDate } })
-            compose.onNodeWithContentDescription("Back to Launchpad").performClick()
+            compose.onNodeWithContentDescription("Back to Daily Blotter").performClick()
             waitTag("dashboard-launchpad")
             compose.onNodeWithTag("calendar-$future").assertIsSelected()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-p"))
             compose.onNodeWithTag("launch-p").performClick()
             waitTag("training-plan-detail")
-            Espresso.pressBack()
+            compose.runOnIdle { requireNotNull(hostActivity).onBackPressedDispatcher.onBackPressed() }
             waitTag("dashboard-launchpad")
             compose.onNodeWithTag("calendar-$future").assertIsSelected()
-            capture("launchpad-scheduled")
+            capture("daily-blotter-scheduled")
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-p"))
             compose.onNodeWithTag("launch-p").performClick()
             waitTag("training-plan-detail")
@@ -128,7 +136,7 @@ class LaunchpadScheduleUiTest {
             assertEquals(listOf(today.toString(), another.toString()),
                 runBlocking { repo.trainingSchedule.observeAll().first().map { it.scheduledDate } })
             assertNotNull(runBlocking { db.trainingPlanDao().get("p") })
-            compose.onNodeWithContentDescription("Back to Launchpad").performClick()
+            compose.onNodeWithContentDescription("Back to Daily Blotter").performClick()
             waitTag("dashboard-launchpad")
             compose.onNodeWithTag("calendar-$future").assertIsSelected()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launchpad-empty"))
@@ -140,13 +148,14 @@ class LaunchpadScheduleUiTest {
                 db.workoutExerciseDao().insert(WorkoutExercise("logged-row", "log", "e", 0))
                 db.workoutSetDao().insert(WorkoutSet("logged-set", "logged-row", 0, 10, 10000, completedAt = now - 100, actualReps = 10))
             }
-            compose.onNodeWithTag("launchpad-calendar").performScrollToIndex(10)
-            compose.onNodeWithTag("calendar-$today").performClick()
+            compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("daily-blotter-today"))
+            compose.onNodeWithTag("daily-blotter-today").performClick()
+            compose.onNodeWithTag("calendar-$today").assertIsSelected()
             compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("launch-log"))
             compose.onNodeWithTag("launch-p").assertDoesNotExist()
             compose.onNodeWithTag("launch-log").assertIsDisplayed()
             assertEquals(2, runBlocking { repo.trainingSchedule.observeAll().first().size })
-            capture("launchpad-completed")
+            capture("daily-blotter-completed")
         } finally { db.close() }
     }
 

@@ -11,6 +11,7 @@ internal fun WorkoutDetails.editSnapshot(): String = JSONArray()
         orderedExercises().forEach { entry ->
             put(JSONArray().put(entry.workoutExercise.exerciseId)
                 .put(entry.workoutExercise.notes)
+                .put(com.darkoceantech.myfitnesspolice.data.EquipmentConfigurationConverters().encode(entry.workoutExercise.equipmentOverride))
                 .put(JSONArray().apply {
                     entry.workoutExercise.equipmentPositions.forEach { put(JSONArray().put(it.name).put(it.position)) }
                 })

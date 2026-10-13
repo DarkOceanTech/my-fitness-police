@@ -44,7 +44,8 @@ class ActiveExerciseSwapTest {
         assertEquals(before.orderedSets(), details("live").orderedSets())
         assertEquals(before.sessionState, details("live").sessionState)
         val changed = entry().workoutExercise
-        assertEquals(before.exercises.first().workoutExercise.copy(exerciseId = "replacement", notes = "", equipmentPositions = emptyList()), changed)
+        assertEquals(before.exercises.first().workoutExercise.copy(exerciseId = "replacement", notes = "", equipmentPositions = emptyList(),
+            equipmentSnapshot = EquipmentConfiguration(legacyDescription = "Cable")), changed)
         assertEquals(saved, details("saved")); assertEquals(history, details("history"))
     }
     @Test fun lastSessionImportsOnlyPrescriptionsAndRepairsReadyPointer() = runBlocking {

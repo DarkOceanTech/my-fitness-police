@@ -33,6 +33,12 @@ object DashboardInsights {
     val baselineContract = "Intensity uses the highest earlier Epley estimate for the same exercise from weighted working sets of 1–10 actual reps " +
         "in the preceding 90 days, before the selected set’s calendar day. A single rep uses the recorded load. " +
         "The current set cannot raise its own baseline. This is an estimated comparison ceiling, not a measured personal 1RM or a safety limit."
+    private val weeklyBaselineContract = "Weekly intensity uses the highest eligible Epley estimate for the same exercise across all recorded history, " +
+        "strictly before the evaluated set’s completion time, including earlier sets on the same day. " +
+        "Weighted working sets with 1–10 actual reps qualify; singles use their recorded load. " +
+        "Unfinished, unconfirmed, warm-up and invalid records do not establish a reference. The current set, simultaneous sets and later performances cannot raise its baseline. " +
+        "An older reference remains eligible even outside the displayed eight-week chart range. Missing references stay Unknown. " +
+        "This is an estimated comparison ceiling, not a measured personal 1RM or a safety limit."
 
     fun forChart(id: String): DashboardInsight = when (id) {
         "weekly-volume" -> DashboardInsight("Sum actual reps × external weight for every completed set. Each stored row is one set; do not multiply by its set number. Units: Lbs-reps.",
@@ -50,7 +56,7 @@ object DashboardInsights {
         "weekly-intensity" -> DashboardInsight("Count working sets by external weight / earlier estimated 1RM: Low <60%; Medium 60–85% inclusive; High >85%. Missing reference or zero external load = Unknown.",
             "Review this week’s relative loading distribution. Unknown sets remain visible in the denominator.",
             "Plotkin et al. compared load progression with repetition progression over eight weeks. Both supported adaptations; small differences in rectus femoris growth and dynamic strength were uncertain. It did not validate these exact zone boundaries.",
-            baselineContract + " These boundaries are descriptive programming bins; a donut cannot prove that a periodization plan is optimal.", listOf(loads))
+            weeklyBaselineContract + " These boundaries are descriptive programming bins; a donut cannot prove that a periodization plan is optimal.", listOf(loads))
         "daily-fatigue" -> DashboardInsight("For the selected lift, order completed sets chronologically. Left axis = external load (Lbs); right axis = actual repetitions.",
             "Spot changes across a day’s sets and compare them with notes, set type, exercise setup and intended progression.",
             "Acute circuit studies provide context for work/rest and performance changes. Weight and rep traces alone do not measure internal neuromuscular fatigue or mechanical breakdown.",

@@ -26,18 +26,22 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
             MyFitnessPoliceTheme {
-                MyFitnessPoliceApp((application as FitnessApplication).repository)
+                MyFitnessPoliceApp((application as FitnessApplication).repository, (application as FitnessApplication).settings)
             }
         }
     }
 }
 
 @Composable
-fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.FitnessRepository) {
-    val factory = remember(repository) { FitnessViewModelFactory(repository) }
+fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.FitnessRepository,
+    settings: com.darkoceantech.myfitnesspolice.data.AppSettingsRepository? = null) {
+    val factory = remember(repository, settings) { FitnessViewModelFactory(repository, settings) }
+    val weekStartsOn by (settings?.weekStartsOn ?: remember { kotlinx.coroutines.flow.MutableStateFlow(java.time.DayOfWeek.MONDAY) })
+        .collectAsStateWithLifecycle()
     val sessionModel: SessionViewModel = viewModel(factory = factory)
     val exercisesModel: ExercisesViewModel = viewModel(factory = factory)
     val dashboardModel: DashboardViewModel = viewModel(factory = factory)
+    val equipmentModel: EquipmentLibraryViewModel = viewModel(factory = factory)
     val stretchModel: StretchViewModel = viewModel(factory = factory)
     val mobility by stretchModel.state.collectAsStateWithLifecycle()
     val mobilitySession = mobility.sessions.firstOrNull { it.endedAt == null }
@@ -85,6 +89,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
     val landscapeSession = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
         currentDestination == AppDestinations.ACADEMY && trainingVisible
 
+    CompositionLocalProvider(LocalEquipmentLibraryModel provides equipmentModel) {
     MyFitnessPoliceTheme {
         Scaffold(modifier = Modifier.fillMaxSize().policeBackdrop(), containerColor = Color.Transparent,
             contentColor = PoliceColors.Text) { innerPadding ->
@@ -94,7 +99,9 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                         val screenModifier = Modifier.fillMaxSize()
                         when (currentDestination) {
                             AppDestinations.DISPATCH -> {
-                                if (settingsOpen) DemoSettingsScreen(screenModifier, onBack = { settingsOpen = false })
+                                if (settingsOpen) DemoSettingsScreen(screenModifier, onBack = { settingsOpen = false },
+                                    weekStartsOn = if (settings != null) weekStartsOn else null,
+                                    onWeekStartChanged = { settings?.setWeekStartsOn(it) })
                                 else DashboardRoute(dashboardModel, screenModifier, onSettings = { settingsOpen = true },
                                     selectedDay = java.time.LocalDate.parse(dispatchDay), onDayChanged = { dispatchDay = it.toString() },
                                     onPlan = { id -> launchPlanId = id; selectDestination(AppDestinations.ACADEMY) },
@@ -119,7 +126,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                             AppDestinations.DOR -> {
                                 if (historyOpen) WorkoutHistoryScreen(sessionModel, historySelection, { historySelection = it }, screenModifier,
                                     onBack = { historyOpen = false; historySelection = null },
-                                    selectedBackLabel = if (historyFromLaunchpad) "Back to Launchpad" else null,
+                                    selectedBackLabel = if (historyFromLaunchpad) "Back to Daily Blotter" else null,
                                     onSelectedBack = if (historyFromLaunchpad) ({
                                         historyOpen = false; historySelection = null; selectDestination(AppDestinations.DISPATCH)
                                     }) else null)
@@ -147,6 +154,8 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
             onDismiss = { historyGrouping = false; sessionModel.clearError() },
             onGrouped = { historyGrouping = false; historyOpen = true; historySelection = null })
     }
+}
+
 }
 
 enum class AppDestinations(val label: Int, val icon: Int) {

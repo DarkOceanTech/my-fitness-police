@@ -174,6 +174,9 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
         saving = false, error = null, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets) else it }
             editingExerciseId = null
+        }, onSaveWithEquipment = { sets, config ->
+            includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config) else it }
+            editingExerciseId = null
         })
 }
 
@@ -321,7 +324,7 @@ internal fun TrainingPlanDetailScreen(details: TrainingPlanDetails, library: Lis
         action.error?.let { Text(it, color = PoliceColors.Error) }
     }
     Column(modifier.fillMaxSize().testTag("training-plan-detail")) {
-        SectionPageHeader(details.plan.name, onBack = onBack, backLabel = if (fromLaunchpad) "Back to Launchpad" else "Back to Plan", enabled = !action.saving) {
+        SectionPageHeader(details.plan.name, onBack = onBack, backLabel = if (fromLaunchpad) "Back to Daily Blotter" else "Back to Plan", enabled = !action.saving) {
             Box {
                 IconButton(onClick = { options = true }, enabled = !action.saving,
                     modifier = Modifier.semantics { contentDescription = "Training plan options" }) { Text("⋮", fontSize = 26.sp) }
@@ -364,5 +367,8 @@ internal fun TrainingPlanDetailScreen(details: TrainingPlanDetails, library: Lis
         saving = action.saving, error = action.error, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             requestedSave = true
             onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets) else it })
+        }, onSaveWithEquipment = { sets, config ->
+            requestedSave = true
+            onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config) else it })
         })
 }
