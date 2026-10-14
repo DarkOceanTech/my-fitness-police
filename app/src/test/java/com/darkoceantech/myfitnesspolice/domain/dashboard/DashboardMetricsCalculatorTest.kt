@@ -5,6 +5,83 @@ import org.junit.Test
 import java.time.*
 
 class DashboardMetricsCalculatorTest {
+    @Test fun intensityEightWeeksRespectBoundariesAndIncludeWarmupsOnlyInSummary() {
+        val sunday = LocalDate.of(2026, 9, 27)
+        val monday = sunday.plusDays(1)
+        val input = listOf(
+            session("old", day.minusYears(1), listOf(row("ref", day.minusYears(1), weight = 100.0, reps = 1))),
+            session("sun", sunday, listOf(row("low", sunday, weight = 50.0, reps = 1))),
+            session("mon", monday, listOf(row("zero", monday, weight = 0.0), row("warmup", monday, warmup = true))),
+            session("warmups-only", day.minusWeeks(2), listOf(row("wu", day.minusWeeks(2), warmup = true))))
+        for (start in listOf(DayOfWeek.MONDAY, DayOfWeek.SUNDAY)) {
+            val chart = report(input, weekStartsOn = start).chart("weekly-intensity")
+            assertEquals(ChartKind.HORIZONTAL_PERCENT_BAR, chart.kind)
+            assertEquals(listOf("Low", "Moderate", "High", "Unknown"), chart.series.map { it.name })
+            val current = startOfWeek(day, start)
+            assertEquals((7 downTo 0).map { current.minusWeeks(it.toLong()).format(java.time.format.DateTimeFormatter.ofPattern("MM/dd")) }, chart.labels)
+            assertEquals(if (start == DayOfWeek.SUNDAY) 3 else 2, chart.weeklySetTotals.last())
+            assertEquals(if (start == DayOfWeek.SUNDAY) listOf(50.0, 0.0, 0.0, 50.0) else listOf(0.0, 0.0, 0.0, 100.0), chart.intensityPercentages(7))
+            assertEquals(1, chart.weeklySetTotals[5])
+            assertEquals(0.0, chart.intensityPercentages(5).sum(), 0.0)
+            chart.labels.indices.forEach { week ->
+                assertEquals(if (chart.weeklyTotal(week) > 0) 100.0 else 0.0, chart.intensityPercentages(week).sum(), 1e-10)
+            }
+            assertNull(chart.emptyReason)
+        }
+        val empty = report().chart("weekly-intensity")
+        assertEquals(8, empty.labels.size)
+        assertTrue(empty.weeklySetTotals.all { it == 0 })
+        assertNull(empty.emptyReason)
+        val newYear = report(selected = LocalDate.of(2026, 1, 1)).chart("weekly-intensity")
+        assertEquals("12/29", newYear.labels.last())
+        assertEquals("11/10", newYear.labels.first())
+    }
+    @Test fun densityKeepsSeparateFullPrecisionTimesAndNeverAddsRatioToDuration() {
+        val chart = report(listOf(session("s", rows = listOf(
+            row("a", active = 15_100, rest = 30_200), row("b", active = 20_300, rest = 10_400))))).chart("weekly-density")
+        assertEquals("Training Density", chart.title)
+        assertEquals(listOf("Work", "Rest", "Work / Rest"), chart.series.map { it.name })
+        assertEquals(2, chart.barSeriesCount)
+        assertEquals(35_400 / 60000.0, chart.series[0].values.last()!!, 1e-12)
+        assertEquals(40_600 / 60000.0, chart.series[1].values.last()!!, 1e-12)
+        assertEquals(35_400 / 40_600.0, chart.series[2].values.last()!!, 1e-12)
+        assertEquals(76_000 / 60000.0, chart.weeklyTotal(7), 1e-12)
+        assertEquals(0.0, chart.weeklyTotal(0), 1e-12)
+        assertNull(chart.series[2].values.first())
+    }
+    @Test fun legacyBackAndNewCategoriesCountEveryWorkingSetOnlyOnce() {
+        val chart = report(listOf(session("s", rows = listOf(
+            row("a", muscle = "Back"), row("b", muscle = "Upper Back"),
+            row("c", muscle = "Trapezius"), row("d", muscle = "Lower Back"),
+            row("e", muscle = "Trapezius", warmup = true))))).chart("weekly-muscles")
+        assertEquals(4.0, chart.series.sumOf { it.values.last()!! }, .001)
+        assertEquals(2.0, chart.series.single { it.name == "Upper Back" }.values.last()!!, .001)
+        assertEquals(1.0, chart.series.single { it.name == "Trapezius" }.values.last()!!, .001)
+        assertEquals(1.0, chart.series.single { it.name == "Lower Back" }.values.last()!!, .001)
+        assertEquals(0.0, chart.series.single { it.name == "Chest" }.values.last()!!, .001)
+        assertFalse(chart.series.any { it.name == "Back" })
+    }
+    @Test fun weeklyDailyVolumeFollowsExistingWeekStartAndSumsToTotal() {
+        val sunday = LocalDate.of(2026, 9, 27)
+        val monday = sunday.plusDays(1)
+        val sessions = listOf(
+            session("sun", sunday, listOf(row("sun", sunday, weight = 12.5, reps = 3))),
+            session("mon", monday, listOf(row("mon", monday, weight = 100.0, reps = 10),
+                row("bad", monday, weight = Double.NaN))))
+        for (start in listOf(DayOfWeek.MONDAY, DayOfWeek.SUNDAY)) {
+            val chart = report(sessions, weekStartsOn = start).chart("weekly-volume")
+            assertEquals(8, chart.weeklyDays.size)
+            chart.weeklyDays.forEachIndexed { index, days ->
+                assertEquals(7, days.size)
+                assertEquals(start, days.first().date.dayOfWeek)
+                assertEquals(chart.series.single().values[index]!!, days.sumOf { it.volume }, .001)
+                days.zipWithNext().forEach { (a, b) -> assertEquals(a.date.plusDays(1), b.date) }
+            }
+            val current = chart.weeklyDays.last()
+            assertEquals(if (start == DayOfWeek.SUNDAY) 1037.5 else 1000.0, current.sumOf { it.volume }, .001)
+            assertEquals(0.0, current.last().volume, .001)
+        }
+    }
     @Test fun completedScheduledPlanBecomesOnlyALogAndOtherDatesStayScheduled() {
         val p = DashboardPlan("p", "Back patrol", null, time(day.minusDays(1)), 1, 10)
         val dates = listOf(DashboardSchedule("p", day), DashboardSchedule("p", day.plusDays(1)))
@@ -56,7 +133,7 @@ class DashboardMetricsCalculatorTest {
         val r = report(listOf(session("prior", prior, listOf(row("base", prior, reps = 1))), session("today", rows = current)))
         // The prior-week baseline also appears in the selected week only when dates overlap;
         // here it is outside this week's donut and never supplies another exercise's ceiling.
-        assertEquals(listOf(1.0, 2.0, 2.0, 2.0), r.chart("weekly-intensity").series.map { it.values.single() })
+        assertEquals(listOf(1.0, 2.0, 2.0, 2.0), r.chart("weekly-intensity").series.map { it.values.last() })
         assertEquals(100.0, r.chart("daily-intensity").reference!!, .001)
     }
 
@@ -67,7 +144,7 @@ class DashboardMetricsCalculatorTest {
             session("recent", recent, listOf(row("recent", recent, weight = 100.0, reps = 1))),
             session("today", rows = listOf(row("current", weight = 150.0, reps = 10))))
         val r = report(records)
-        assertEquals(listOf(0.0, 1.0, 0.0, 0.0), r.chart("weekly-intensity").series.map { it.values.single() })
+        assertEquals(listOf(0.0, 1.0, 0.0, 0.0), r.chart("weekly-intensity").series.map { it.values.last() })
         assertEquals(8, r.chart("weekly-volume").labels.size)
         assertEquals("8/10", r.chart("weekly-volume").labels.first())
         assertEquals("9/28", r.chart("weekly-volume").labels.last())
@@ -87,7 +164,7 @@ class DashboardMetricsCalculatorTest {
             row("afterPeak", weight = 70.0, reps = 1).copy(completedAt = time(day) + 3000))
         val r = report(listOf(session("same-day", rows = rows)))
         // First has no baseline, the simultaneous pair both use 100, the final set uses 1000.
-        assertEquals(listOf(1.0, 1.0, 1.0, 1.0), r.chart("weekly-intensity").series.map { it.values.single() })
+        assertEquals(listOf(1.0, 1.0, 1.0, 1.0), r.chart("weekly-intensity").series.map { it.values.last() })
         assertNull(r.chart("daily-intensity").reference)
     }
 
@@ -105,7 +182,7 @@ class DashboardMetricsCalculatorTest {
         val afterNow = row("future", old, weight = 1000.0).copy(completedAt = time(day.plusDays(1)))
         val r = report(listOf(session("invalid", old, invalid + afterNow),
             session("current", rows = listOf(row("unknown", weight = 80.0)))))
-        assertEquals(listOf(0.0, 0.0, 0.0, 1.0), r.chart("weekly-intensity").series.map { it.values.single() })
+        assertEquals(listOf(0.0, 0.0, 0.0, 1.0), r.chart("weekly-intensity").series.map { it.values.last() })
         assertEquals(800.0, r.chart("weekly-volume").series.single().values.last()!!, .001)
     }
 
@@ -116,9 +193,9 @@ class DashboardMetricsCalculatorTest {
             row("negative", weight = -1.0), row("negativeReps", reps = -1),
             row("unfinished").copy(completedAt = 0), row("negativeTiming", active = -1))
         val r = report(listOf(session("invalid-current", rows = rows)))
-        assertEquals(listOf(0.0, 0.0, 0.0, 1.0), r.chart("weekly-intensity").series.map { it.values.single() })
+        assertEquals(listOf(0.0, 0.0, 0.0, 1.0), r.chart("weekly-intensity").series.map { it.values.last() })
         assertEquals(100.0, r.chart("weekly-volume").series.single().values.last()!!, .001)
-        assertEquals(1.0, r.chart("weekly-muscles").series.single().values.last()!!, .001)
+        assertEquals(1.0, r.chart("weekly-muscles").series.sumOf { it.values.last()!! }, .001)
     }
 
     @Test fun epleyRejectsUnsupportedSetsAndUsesBestEligibleEstimatePerDay() {
@@ -217,9 +294,9 @@ class DashboardMetricsCalculatorTest {
         val r = report(listOf(session("s", rows = listOf(row("a", rest = 30_000), row("b", rest = 0)), finished = false)))
         assertEquals(listOf(30.0, null), r.chart("daily-rest").series.single().values)
         assertEquals("30 sec avg", r.chart("daily-rest").headline)
-        assertEquals(2.0, r.chart("weekly-density").series[1].values.last()!!, .001)
+        assertEquals(2.0, r.chart("weekly-density").series[2].values.last()!!, .001)
         val noRest = report(listOf(session("z", rows = listOf(row("z", rest = 0)))))
-        assertNull(noRest.chart("weekly-density").series[1].values.last())
+        assertNull(noRest.chart("weekly-density").series[2].values.last())
         assertEquals(0.0, noRest.chart("daily-rest").series.single().values.single()!!, .001)
         assertNull(noRest.chart("daily-rest").emptyReason)
     }

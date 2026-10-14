@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -133,7 +135,7 @@ private fun StretchMovementCard(movement: StretchMovement, onInfo: () -> Unit, o
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(movement.name, style = MaterialTheme.typography.titleLarge)
-                Text(movement.muscles, color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+                Text(MuscleLabels.displayTags(movement.muscles), color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
             }
             Box {
                 IconButton(onClick = { menu = true }) { Text("⋮", fontSize = 24.sp) }
@@ -193,10 +195,10 @@ internal fun StretchMovementForm(original: StretchMovement?, action: SessionActi
             item { OutlinedTextField(movement.equipment, { update(movement.copy(equipment = it)) }, label = { Text("Equipment (No equipment is allowed)") }, modifier = Modifier.fillMaxWidth()) }
             item {
                 Text("Target muscles", color = PoliceColors.Muted)
-                ExerciseMuscleFilters(MuscleGroup.entries.filter { movement.muscles.split(";").map(String::trim).contains(it.label) ||
+                ExerciseMuscleFilters(MuscleGroup.entries.filter { movement.muscles.split(";").map(MuscleLabels::full).contains(it.label) ||
                     (movement.muscles.isNotBlank() && it == stretchGroup(movement)) }.toSet(),
                     MuscleGroup.entries.toList(), onChange = { update(movement.copy(muscles = it.joinToString("; ") { g -> g.label })) })
-                Text(movement.muscles.ifBlank { "None selected" }, color = PoliceColors.LightBlue)
+                Text(MuscleLabels.displayTags(movement.muscles).ifBlank { "None selected" }, color = PoliceColors.LightBlue)
             }
             item { StretchChoice("Movement type", movement.movementType, listOf("Held stretch", "Moving mobility")) { update(movement.copy(movementType = it)) } }
             item { StretchChoice("Side configuration", if (movement.separateSides) "Left and right separately" else "Both sides together",
@@ -222,7 +224,7 @@ internal fun StretchInfo(movement: StretchMovement, onClose: () -> Unit) {
     }) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { Text(movement.name, style = MaterialTheme.typography.titleLarge) }
-            listOf("Instructions" to movement.instructions, "Target muscles" to movement.muscles, "Equipment" to movement.equipment,
+            listOf("Instructions" to movement.instructions, "Target muscles" to MuscleLabels.displayTags(movement.muscles), "Equipment" to movement.equipment,
                 "Movement type" to movement.movementType, "Sides" to if (movement.separateSides) "Separate · starts on ${movement.startingSide}" else "Both together").forEach { (label, value) ->
                 item { Text(label, color = PoliceColors.LightBlue); Text(value.ifBlank { "Not specified" }) }
             }

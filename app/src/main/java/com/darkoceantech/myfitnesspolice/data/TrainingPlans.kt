@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.data
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
@@ -198,7 +200,7 @@ class TrainingPlanRepository(private val database: FitnessDatabase) {
     }
 }
 
-fun Workout.displayName(): String = name.ifBlank { targetMuscles.replace(",", " / ").ifBlank { "My Workout" } }
+fun Workout.displayName(): String = name.ifBlank { MuscleLabels.displayTags(targetMuscles).replace(",", " / ").ifBlank { "My Workout" } }
 fun WorkoutDetails.plannedSets(): Int = exercises.sumOf { it.sets.size }
 fun WorkoutDetails.plannedReps(): Long = exercises.sumOf { entry -> entry.sets.sumOf { it.reps.toLong() } }
 

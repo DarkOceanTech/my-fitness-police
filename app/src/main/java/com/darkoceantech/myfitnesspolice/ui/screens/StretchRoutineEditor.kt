@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -199,7 +201,7 @@ private fun StretchPicker(catalog: List<StretchMovement>, selected: List<String>
             items(catalog.filter { it.name.contains(query, true) && (!onlySelected || it.id in selected) }, key = { it.id }) { movement ->
                 StretchPanel {
                     Text(movement.name, style = MaterialTheme.typography.titleMedium)
-                    Text(movement.muscles, color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+                    Text(MuscleLabels.displayTags(movement.muscles), color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
                     if (movement.id in selected) OutlinedButton(onClick = { onToggle(movement) }) { Text("Remove", color = PoliceColors.Error) }
                     else PoliceButton(onClick = { onToggle(movement) }, modifier = Modifier.testTag("select-stretch-" + movement.id)) { Text("Add") }
                 }

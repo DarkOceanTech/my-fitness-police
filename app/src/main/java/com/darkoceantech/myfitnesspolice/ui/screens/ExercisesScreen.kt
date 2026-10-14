@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -169,11 +171,11 @@ private fun ExerciseCatalogCard(exercise: Exercise, enabled: Boolean = true, onS
                 color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelSmall)
             ExerciseDetailField("COMPATIBLE EQUIPMENT", exercise.equipment.ifBlank { "Not specified" })
             EquipmentConfigurationSummary(exercise.equipmentDefault)
-            ExerciseDetailField("PRIMARY MUSCLES", exercise.primaryMuscles.ifBlank { "Not specified" })
+            ExerciseDetailField("PRIMARY MUSCLES", MuscleLabels.displayTags(exercise.primaryMuscles).ifBlank { "Not specified" })
             if (expanded) {
                 HorizontalDivider(color = PoliceColors.Border)
                 ExerciseDetailField("DESCRIPTION", exercise.description.ifBlank { "No description added" })
-                ExerciseDetailField("SECONDARY MUSCLES", exercise.secondaryMuscles.ifBlank { "Not specified" })
+                ExerciseDetailField("SECONDARY MUSCLES", MuscleLabels.displayTags(exercise.secondaryMuscles).ifBlank { "Not specified" })
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("exercise-details-${exercise.id}")) {
@@ -278,8 +280,8 @@ private fun ExerciseFormDialog(formState: ExerciseFormState, onDismiss: () -> Un
     var name by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.name.orEmpty()) }
     var equipment by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.equipment.orEmpty()) }
     var description by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.description.orEmpty()) }
-    var primary by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.primaryMuscles.orEmpty()) }
-    var secondary by rememberSaveable(exercise?.id) { mutableStateOf(exercise?.secondaryMuscles.orEmpty()) }
+    var primary by rememberSaveable(exercise?.id) { mutableStateOf(MuscleLabels.displayTags(exercise?.primaryMuscles.orEmpty())) }
+    var secondary by rememberSaveable(exercise?.id) { mutableStateOf(MuscleLabels.displayTags(exercise?.secondaryMuscles.orEmpty())) }
     ExerciseDialogFrame(if (exercise == null) "Create New Exercise" else "Edit exercise details", !form.saving, onDismiss,
         screenTag = "exercise-editor-screen", backLabel = "Close exercise form", footer = {
         TextButton(onClick = onDismiss, enabled = !form.saving) { Text("Cancel") }

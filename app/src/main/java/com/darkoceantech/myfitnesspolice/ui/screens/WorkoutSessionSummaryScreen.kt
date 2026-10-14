@@ -49,7 +49,7 @@ internal fun WorkoutSessionSummaryScreen(workout: WorkoutDetails, now: Long, act
                             Text(when { finished -> "Saved with your last set"
                                 progress?.isPaused == true -> "Cool-down paused"
                                 remaining == 0L -> "Saving your workout…"
-                                else -> "One-minute cool-down · counts as break time" }, style = MaterialTheme.typography.bodySmall,
+                                else -> "One-minute cool-down · counts as rest time" }, style = MaterialTheme.typography.bodySmall,
                                 color = PoliceColors.Muted)
                         }
                         Text(sessionTime(if (finished) finalRest else ((remaining + 999) / 1000) * 1000),
@@ -82,7 +82,7 @@ internal fun WorkoutSessionSummaryScreen(workout: WorkoutDetails, now: Long, act
             Surface(Modifier.fillMaxWidth(), shape = PoliceCardShape, color = PoliceColors.Card,
                 border = BorderStroke(1.dp, PoliceColors.Border)) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    listOf("Lbs lifted" to pounds, "Active" to sessionTime(activeMillis), "Break" to sessionTime(breakMillis))
+                    listOf("Lbs lifted" to pounds, "Work" to sessionTime(activeMillis), "Rest" to sessionTime(breakMillis))
                         .forEach { (label, value) -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
                             Text(value, style = StatTypography.copy(fontSize = 18.sp))

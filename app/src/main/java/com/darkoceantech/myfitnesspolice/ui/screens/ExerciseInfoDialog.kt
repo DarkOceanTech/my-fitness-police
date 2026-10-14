@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,7 +22,7 @@ internal fun ExerciseInfoDialog(exercise: Exercise, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(exercise.name, style = MaterialTheme.typography.titleLarge, color = PoliceColors.Text)
             listOf("Description" to exercise.description, "Equipment" to exercise.equipment,
-                "Primary muscles" to exercise.primaryMuscles, "Secondary muscles" to exercise.secondaryMuscles).forEach { (label, value) ->
+                "Primary muscles" to MuscleLabels.displayTags(exercise.primaryMuscles), "Secondary muscles" to MuscleLabels.displayTags(exercise.secondaryMuscles)).forEach { (label, value) ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(label, color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelLarge)
                     Text(value.ifBlank { "Not specified" }, color = PoliceColors.Text, style = MaterialTheme.typography.bodyMedium)

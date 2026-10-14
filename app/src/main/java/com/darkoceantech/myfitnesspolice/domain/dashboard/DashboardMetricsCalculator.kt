@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.domain.dashboard
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import java.time.*
 import com.darkoceantech.myfitnesspolice.domain.formatting.formatWeight
 import java.time.format.DateTimeFormatter
@@ -40,7 +42,8 @@ class DashboardMetricsCalculator {
         val weeklySets = sets.filter(::validWeeklyRecord)
         val weeks = weekDates.map { start -> weeklySets.filter { it.date >= start && it.date < start.plusWeeks(1) && it.date <= day } }
         val labels = weekDates.map { it.format(DateTimeFormatter.ofPattern("M/d")) }
-        val muscles = weeks.flatten().filter { !it.set.warmup }.map { it.set.muscle }.distinct().sorted()
+        val muscles = (MuscleLabels.canonical + weeks.flatten().filter { !it.set.warmup }
+            .map { MuscleLabels.full(it.set.muscle) }).distinct().sorted()
         val weekActive = weeks.map { list -> list.sumOf { it.set.activeMillis } / 60000.0 }
         val weekBreak = weeks.map { list -> list.sumOf { it.set.breakMillis } / 60000.0 }
         // Keep the existing daily reference separate from the weekly all-history contract.
@@ -72,24 +75,28 @@ class DashboardMetricsCalculator {
             }
             return counts
         }
-        val zones = intensity(weeks.last())
+        val zones = weeks.map(::intensity)
         val weekly = listOf(
-            chart("weekly-volume", "Weekly Volume Progress", formatWeight(weeks.last().sumOf { it.set.pounds * it.set.reps }) + " Lbs-reps",
+            chart("weekly-volume", "Volume Progression", formatWeight(weeks.last().sumOf { it.set.pounds * it.set.reps }) + " Lbs-reps",
                 "Last 8 weeks · through ${day.format(DateTimeFormatter.ofPattern("MMM d"))}", ChartKind.LINE, labels,
-                listOf(series("Volume", weeks.map { rows -> rows.sumOf { it.set.pounds * it.set.reps } })), "Lbs-reps",
-                empty = if (weeks.all { it.isEmpty() }) "No recorded sets in these eight weeks." else null),
-            chart("weekly-muscles", "Weekly Muscle Set Count", "${weeks.last().count { !it.set.warmup }} working sets",
+                listOf(series("Volume", weeks.map { rows -> rows.sumOf { it.set.pounds * it.set.reps } })), "Lbs lifted",
+                empty = if (weeks.all { it.isEmpty() }) "No recorded sets in these eight weeks." else null).copy(
+                    weeklyDays = weekDates.mapIndexed { index, start -> (0L..6L).map { offset ->
+                        val date = start.plusDays(offset)
+                        DailyVolume(date, weeks[index].filter { it.date == date }.sumOf { it.set.pounds * it.set.reps })
+                    } }),
+            chart("weekly-muscles", "Muscle Set Count", "${weeks.last().count { !it.set.warmup }} working sets",
                 "Last 8 weeks · one main muscle group per set", ChartKind.STACKED_BAR, labels,
-                muscles.map { muscle -> series(muscle, weeks.map { week -> week.count { !it.set.warmup && it.set.muscle == muscle }.toDouble() }) }, "sets"),
-            chart("weekly-density", "Weekly Workout Density", number(weekActive.last() + weekBreak.last()) + " min",
-                "Recorded active + break time · pauses excluded", ChartKind.COMBO, labels,
-                listOf(series("Total time", weekActive.zip(weekBreak) { a, b -> a + b }),
-                    ChartSeries("Active / break", weekActive.zip(weekBreak) { a, b -> if (b > 0) a / b else null })), "min", "ratio",
-                empty = if (weekActive.sum() + weekBreak.sum() == 0.0) "No recorded timing in these eight weeks." else null),
-            chart("weekly-intensity", "Weekly Intensity Distribution", "${zones.sum().toInt()} working sets",
-                "Selected week · earlier estimated 1RM baseline", ChartKind.DONUT, listOf("Sets"),
-                listOf("Low <60%", "Medium 60–85%", "High >85%", "Unknown baseline").mapIndexed { i, name -> series(name, listOf(zones[i])) }, "sets",
-                empty = if (zones.sum() == 0.0) "No completed working sets this week." else null)
+                muscles.map { muscle -> series(muscle, weeks.map { week -> week.count { !it.set.warmup && MuscleLabels.full(it.set.muscle) == muscle }.toDouble() }) }, "sets"),
+            chart("weekly-density", "Training Density", number(weekActive.last() + weekBreak.last()) + " min",
+                "Recorded Work + Rest time · pauses excluded", ChartKind.COMBO, labels,
+                listOf(series("Work", weekActive), series("Rest", weekBreak),
+                    ChartSeries("Work / Rest", weekActive.zip(weekBreak) { a, b -> if (b > 0) a / b else null })), "min", "ratio",
+                empty = if (weekActive.sum() + weekBreak.sum() == 0.0) "No recorded timing in these eight weeks." else null).copy(barSeriesCount = 2),
+            chart("weekly-intensity", "Intensity Distribution", "", "Eight weeks · earlier estimated 1RM baseline",
+                ChartKind.HORIZONTAL_PERCENT_BAR, weekDates.map { it.format(DateTimeFormatter.ofPattern("MM/dd")) },
+                listOf("Low", "Moderate", "High", "Unknown").mapIndexed { i, name -> series(name, zones.map { it[i] }) }, "sets")
+                .copy(weeklySetTotals = weeks.map { it.size })
         )
         val daySets = sets.filter { it.date == day }
         val dailyChoices = choices(daySets)
@@ -103,15 +110,15 @@ class DashboardMetricsCalculator {
                 ChartKind.DUAL_LINE, setLabels, listOf(series("Weight", liftSets.map { it.set.pounds }), series("Reps", liftSets.map { it.set.reps.toDouble() })), "Lbs", "reps", empty = if (liftSets.isEmpty()) dailyEmpty else null),
             chart("daily-time", "Session Time Breakdown", number(daySets.sumOf { it.set.activeMillis + it.set.breakMillis } / 60000.0) + " min",
                 "All recorded sets on ${day.format(DateTimeFormatter.ofPattern("MMM d"))}", ChartKind.DONUT, listOf("Time"),
-                listOf(series("Active lifting", listOf(daySets.sumOf { it.set.activeMillis } / 60000.0)),
-                    series("Rest breaks", listOf(daySets.sumOf { it.set.breakMillis } / 60000.0))), "min",
+                listOf(series("Work time", listOf(daySets.sumOf { it.set.activeMillis } / 60000.0)),
+                    series("Rest time", listOf(daySets.sumOf { it.set.breakMillis } / 60000.0))), "min",
                 empty = if (daySets.sumOf { it.set.activeMillis + it.set.breakMillis } == 0L) "No recorded timing for this day." else null),
             chart("daily-intensity", "Intra-Workout Intensity", "${liftSets.size} sets", "Weight per set · dashed line = earlier estimated 1RM",
                 ChartKind.BAR, setLabels, listOf(series("Weight", liftSets.map { it.set.pounds })), "Lbs",
                 empty = if (liftSets.isEmpty()) dailyEmpty else null, reference = liftSets.firstOrNull()?.let(::baseline)),
             chart("daily-rest", "Rest Interval Consistency", number(breaks.filterNotNull().average().takeIf { it.isFinite() } ?: 0.0) + " sec avg",
-                "Chronological recorded breaks · includes final cool-down", ChartKind.LINE, daySets.indices.map { "${it + 1}" },
-                listOf(ChartSeries("Break", breaks)), "sec",
+                "Chronological recorded rest intervals · includes final cool-down", ChartKind.LINE, daySets.indices.map { "${it + 1}" },
+                listOf(ChartSeries("Rest", breaks)), "sec",
                 empty = if (daySets.isEmpty()) dailyEmpty else null)
         )
         val monthStart = day.withDayOfMonth(1)

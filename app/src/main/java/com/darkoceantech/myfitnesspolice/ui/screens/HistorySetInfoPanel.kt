@@ -127,11 +127,11 @@ internal fun RecordedSetInfoPanel(
             Surface(Modifier.fillMaxWidth().testTag("$tagPrefix-set-times"), shape = PoliceCardShape, color = PoliceColors.Card,
                 border = BorderStroke(1.dp, PoliceColors.Border)) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    listOf("Active" to activeMillis, "Break" to restMillis, "Total" to activeMillis + restMillis).forEach { (label, duration) ->
+                    listOf("Work" to activeMillis, "Rest" to restMillis, "Total" to activeMillis + restMillis).forEach { (label, duration) ->
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
                             Text(sessionTime(duration), style = StatTypography.copy(fontSize = 20.sp),
-                                modifier = Modifier.testTag("$tagPrefix-set-${label.lowercase()}-time"))
+                                modifier = Modifier.testTag("$tagPrefix-set-${when (label) { "Work" -> "active"; "Rest" -> "break"; else -> label.lowercase() }}-time"))
                         }
                     }
                 }

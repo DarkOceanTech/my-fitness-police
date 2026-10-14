@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,9 +18,9 @@ fun WorkoutDetailsFields(workout: Workout?, enabled: Boolean, onChange: (String,
         OutlinedTextField(workout?.name.orEmpty(), { onChange("name", it) }, enabled = enabled,
             label = { Text("Workout name") }, placeholder = { Text("Biceps — Strength") }, maxLines = 2,
             modifier = Modifier.fillMaxWidth().testTag("workout-name"))
-        val muscles = workout?.targetMuscles.orEmpty().split(",").filter { it.isNotBlank() }
+        val muscles = workout?.targetMuscles.orEmpty().split(",").map(MuscleLabels::full).distinct().filter { it.isNotBlank() }
         DetailDropdown("Target muscles", muscles.joinToString(", ").ifBlank { "Select muscles" },
-            (listOf("Shoulders", "Triceps", "Biceps", "Forearms", "Chest", "Back", "Lower Back", "Legs", "Quads", "Hamstrings", "Glutes", "Calves", "Abdominal") + muscles).distinct(),
+            (listOf("Shoulders", "Triceps", "Biceps", "Forearms", "Chest", "Upper Back", "Trapezius", "Lower Back", "Legs", "Quads", "Hamstrings", "Glutes", "Calves", "Abdominal") + muscles).distinct(),
             muscles.toSet(), enabled, multi = true) { muscle ->
             onChange("muscles", (if (muscle in muscles) muscles - muscle else muscles + muscle).joinToString(","))
         }

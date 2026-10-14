@@ -198,7 +198,7 @@ private fun LastSessionSummary(snapshot: ExerciseSessionSnapshot) {
             Text(snapshot.entry.exercise.name, style = MaterialTheme.typography.titleSmall, color = PoliceColors.LightBlue)
             Text("${completed.size} sets · ${completed.sumOf { (it.actualReps ?: it.reps).toLong() }} reps",
                 style = MaterialTheme.typography.labelLarge)
-            Text("Active ${sessionTime(completed.sumOf { it.activeMillis })} · Break ${sessionTime(completed.sumOf { it.restMillis })}",
+            Text("Work ${sessionTime(completed.sumOf { it.activeMillis })} · Rest ${sessionTime(completed.sumOf { it.restMillis })}",
                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
         }
     }
@@ -256,9 +256,9 @@ internal fun LastSessionSetDetails(snapshot: ExerciseSessionSnapshot, set: Worko
             Surface(Modifier.fillMaxWidth(), shape = PoliceCardShape, color = PoliceColors.Card,
                 border = BorderStroke(1.dp, PoliceColors.Border)) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    listOf("Active" to set.activeMillis, "Break" to set.restMillis,
+                    listOf("Work" to set.activeMillis, "Rest" to set.restMillis,
                         "Total" to set.activeMillis + set.restMillis).forEach { (label, duration) ->
-                        LastSessionValue(label, sessionTime(duration), "last-session-set-${label.lowercase()}-time", Modifier.weight(1f), 20)
+                        LastSessionValue(label, sessionTime(duration), "last-session-set-${when (label) { "Work" -> "active"; "Rest" -> "break"; else -> label.lowercase() }}-time", Modifier.weight(1f), 20)
                     }
                 }
             }

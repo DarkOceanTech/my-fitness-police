@@ -77,8 +77,7 @@ fun DashboardScreen(state: DashboardUiState, modifier: Modifier = Modifier, onSe
                 DailyBlotterRoutineCard(launch, onPlan, onLog)
             }
             item(key = "weekly-heading") {
-                DashboardSectionHeading("Weekly Metrics", "This week · " + report.weekStart
-                    .format(DateTimeFormatter.ofPattern("MMM d")) + " · last 8 weeks", "dashboard-weekly")
+                DashboardSectionHeading("Weekly Metrics", "", "dashboard-weekly")
             }
             item(key = "weekly-carousel") { DashboardChartCarousel("weekly", report.weekly, listOf("Volume", "Muscles", "Density", "Intensity")) { insightId = it } }
             item(key = "daily-heading") {
@@ -103,7 +102,11 @@ private fun DashboardChartCarousel(section: String, charts: List<DashboardChart>
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(state = pager, pageSpacing = 12.dp, verticalAlignment = Alignment.Top,
             modifier = Modifier.fillMaxWidth().testTag("$section-chart-carousel")) { index ->
-            DashboardChartCard(charts[index], onInsights = { onInsights(charts[index].id) })
+            val chart = charts[index]
+            val muscleChart = charts.firstOrNull { it.id == "weekly-muscles" }
+            if (chart.id == "weekly-intensity" && muscleChart != null) {
+                HeightMatchedIntensityCard(chart, muscleChart) { onInsights(chart.id) }
+            } else DashboardChartCard(chart, onInsights = { onInsights(chart.id) })
         }
         Row(Modifier.fillMaxWidth().testTag("$section-chart-tabs")) {
             charts.forEachIndexed { index, chart ->
@@ -127,7 +130,7 @@ private fun DashboardChartCarousel(section: String, charts: List<DashboardChart>
 internal fun DashboardSectionHeading(title: String, subtitle: String, tag: String) {
     Column(Modifier.fillMaxWidth().testTag(tag).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
         SirenRule(Modifier.fillMaxWidth().padding(top = 4.dp))
     }
 }

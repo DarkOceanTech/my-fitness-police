@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ExerciseMuscleGroupsTest {
+    @Test fun backAliasAndPrimaryAnatomyRemainDistinctWithoutRenamingExercises() {
+        val labels = com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+        assertEquals("Upper Back", MuscleGroup.valueOf("BACK").label)
+        assertEquals("Upper Back", labels.full("Back"))
+        assertEquals("Upper Back, Biceps", labels.displayTags("Back, Biceps"))
+        assertEquals("Back squat", labels.displayTags("Back squat"))
+        assertEquals(MuscleGroup.TRAPEZIUS, Exercise(name = "Custom", equipment = "", primaryMuscles = "Trapezius; rhomboid major").mainMuscleGroup())
+        assertEquals(MuscleGroup.BACK, Exercise(name = "Custom", equipment = "", primaryMuscles = "Latissimus dorsi; trapezius").mainMuscleGroup())
+        assertEquals(MuscleGroup.LOWER_BACK, Exercise(name = "Custom", equipment = "", primaryMuscles = "Erector spinae; trapezius").mainMuscleGroup())
+        assertEquals(MuscleGroup.TRAPEZIUS, ExerciseCatalog.exercises.single { it.name == "Dumbbell shrug" }.mainMuscleGroup())
+    }
     @Test fun catalogHasExactlyOneUsefulGroupPerExercise() {
         val catalog = ExerciseCatalog.exercises
         assertEquals(48, catalog.size)
@@ -13,7 +24,7 @@ class ExerciseMuscleGroupsTest {
             catalog.map { it.mainMuscleGroup() }.toSet())
         assertEquals(2, catalog.count { it.mainMuscleGroup() == MuscleGroup.ABDOMINAL })
         assertEquals(48, catalog.groupBy { it.mainMuscleGroup() }.values.sumOf { it.size })
-        assertEquals(11, catalog.count { it.mainMuscleGroup() == MuscleGroup.BACK })
+        assertEquals(10, catalog.count { it.mainMuscleGroup() == MuscleGroup.BACK })
     }
     @Test fun allThenExcludeAndMultipleGroupSelectionsHaveNoDuplicateOrLeakingResults() {
         val catalog = ExerciseCatalog.exercises

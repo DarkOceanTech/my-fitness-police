@@ -89,9 +89,9 @@ internal fun CurrentSessionShortcut(workout: WorkoutDetails, onOpen: () -> Unit)
                 Text(planName, style = MaterialTheme.typography.labelLarge,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("current-session-plan"))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Active ${sessionTime(active)}", style = MaterialTheme.typography.bodySmall,
+                    Text("Work ${sessionTime(active)}", style = MaterialTheme.typography.bodySmall,
                         color = PoliceColors.Muted, modifier = Modifier.testTag("current-session-active-time"))
-                    Text("Break ${sessionTime(rest)}", style = MaterialTheme.typography.bodySmall,
+                    Text("Rest ${sessionTime(rest)}", style = MaterialTheme.typography.bodySmall,
                         color = PoliceColors.Muted, modifier = Modifier.testTag("current-session-break-time"))
                     if (progress?.isPaused == true) Text("Paused", style = MaterialTheme.typography.labelSmall,
                         color = PoliceColors.LightBlue)

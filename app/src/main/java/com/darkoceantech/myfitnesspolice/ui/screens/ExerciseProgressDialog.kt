@@ -124,8 +124,8 @@ private fun ExerciseHistoryOverview(sessions: List<ExerciseSessionSnapshot>) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HistoryMetric("Lbs lifted", formatSessionPounds(volumeGrams), Modifier.weight(1f))
-                HistoryMetric("Active", sessionTime(sets.sumOf { it.activeMillis }), Modifier.weight(1f))
-                HistoryMetric("Break", sessionTime(sets.sumOf { it.restMillis }), Modifier.weight(1f))
+                HistoryMetric("Work", sessionTime(sets.sumOf { it.activeMillis }), Modifier.weight(1f))
+                HistoryMetric("Rest", sessionTime(sets.sumOf { it.restMillis }), Modifier.weight(1f))
             }
         }
     }
@@ -136,6 +136,6 @@ private fun HistoryMetric(label: String, value: String, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
         Text(value, style = StatTypography.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize),
-            color = PoliceColors.LightBlue, modifier = Modifier.testTag("exercise-history-total-${label.lowercase().replace(' ', '-')}"))
+            color = PoliceColors.LightBlue, modifier = Modifier.testTag("exercise-history-total-${when (label) { "Work" -> "active"; "Rest" -> "break"; else -> label.lowercase().replace(' ', '-') }}"))
     }
 }

@@ -4,15 +4,16 @@ import java.util.Locale
 
 /** One main browsing group per movement. Detailed anatomical roles remain on Exercise. */
 enum class MuscleGroup(val label: String) {
-    CHEST("Chest"), BACK("Back"), SHOULDERS("Shoulders"), BICEPS("Biceps"), TRICEPS("Triceps"), FOREARMS("Forearms"),
+    CHEST("Chest"), BACK("Upper Back"), SHOULDERS("Shoulders"), BICEPS("Biceps"), TRICEPS("Triceps"), FOREARMS("Forearms"),
     QUADS("Quads"), HAMSTRINGS("Hamstrings"), GLUTES("Glutes"), CALVES("Calves"),
-    ABDOMINAL("Abdominal"), LOWER_BACK("Lower Back"), OTHER("Other"),
+    ABDOMINAL("Abdominal"), LOWER_BACK("Lower Back"), OTHER("Other"), TRAPEZIUS("Trapezius"),
 }
 
 private val catalogGroups: Map<Int, MuscleGroup> = buildMap {
     fun group(value: MuscleGroup, vararg ids: Int) { ids.forEach { put(it, value) } }
     group(MuscleGroup.CHEST, 2, 15, 16, 17, 18, 19, 20)
-    group(MuscleGroup.BACK, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 25)
+    group(MuscleGroup.BACK, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+    group(MuscleGroup.TRAPEZIUS, 25)
     group(MuscleGroup.SHOULDERS, 4, 21, 22, 23, 24)
     group(MuscleGroup.BICEPS, 26, 27, 28, 29)
     group(MuscleGroup.TRICEPS, 30, 31, 32)
@@ -34,7 +35,8 @@ fun Exercise.mainMuscleGroup(): MuscleGroup {
             listOf("biceps femoris", "semitendinosus", "semimembranosus", "hamstring").any { it in muscle } -> return MuscleGroup.HAMSTRINGS
             listOf("pectoralis", "chest").any { it in muscle } -> return MuscleGroup.CHEST
             listOf("erector spinae", "iliocostalis", "longissimus", "spinalis", "multifidus", "quadratus lumborum", "lower back").any { it in muscle } -> return MuscleGroup.LOWER_BACK
-            listOf("latissimus", "rhomboid", "trapezius", "teres major", "back").any { it in muscle } -> return MuscleGroup.BACK
+            "trapezius" in muscle || muscle == "traps" -> return MuscleGroup.TRAPEZIUS
+            listOf("latissimus", "rhomboid", "teres major", "back").any { it in muscle } -> return MuscleGroup.BACK
             listOf("deltoid", "shoulder", "supraspinatus", "infraspinatus", "teres minor", "subscapularis").any { it in muscle } -> return MuscleGroup.SHOULDERS
             "triceps" in muscle -> return MuscleGroup.TRICEPS
             listOf("forearm", "brachioradialis", "flexor carpi", "extensor carpi", "flexor digitorum", "extensor digitorum", "pronator", "supinator").any { it in muscle } -> return MuscleGroup.FOREARMS

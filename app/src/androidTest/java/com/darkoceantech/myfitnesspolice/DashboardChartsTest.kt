@@ -131,17 +131,17 @@ class DashboardChartsTest {
         val original = DashboardInput(listOf(DashboardSession("s", "Back", time(day), time(day) + 600_000, null, null, rows)), emptyList())
         val state = mutableStateOf(DashboardUiState(report(original), false))
         show(state)
-        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-value"))
-        compose.onNodeWithTag("weekly-volume-value").assertTextEquals("1,000 Lbs-reps")
+        compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-volume-summary-total"))
+        compose.onNodeWithTag("weekly-volume-summary-total").assertTextEquals("1,000 Lbs lifted")
         compose.runOnIdle { state.value = DashboardUiState(report(original.copy(sessions = original.sessions.map {
             it.copy(sets = it.sets.map { set -> set.copy(reps = 11) }) })), false) }
-        compose.onNodeWithTag("weekly-volume-value").assertTextEquals("1,100 Lbs-reps")
+        compose.onNodeWithTag("weekly-volume-summary-total").assertTextEquals("1,100 Lbs lifted")
         selectChart("weekly-intensity")
         compose.onNodeWithTag("dashboard-home").performScrollToNode(hasTestTag("weekly-intensity-chart"))
-        compose.onNodeWithTag("weekly-intensity-chart").assertContentDescriptionContains("Unknown baseline: Sets 1", substring = true)
+        compose.onNodeWithTag("weekly-intensity-week-7").assertContentDescriptionContains("Unknown: 1", substring = true)
         compose.runOnIdle { state.value = DashboardUiState(report(DashboardInput(emptyList(), emptyList())), false) }
-        compose.onNodeWithTag("weekly-intensity-empty").assertExists()
-        compose.onNodeWithTag("weekly-intensity-chart").assertDoesNotExist()
+        compose.onNodeWithTag("weekly-intensity-chart").assertExists()
+        compose.onNodeWithTag("weekly-intensity-summary-total").assertTextEquals("0 total sets")
         screenshot("empty-metrics")
     }
 

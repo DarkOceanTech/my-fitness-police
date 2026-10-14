@@ -133,7 +133,7 @@ fun WorkoutFlowScreen(model: SessionViewModel, history: Boolean, modifier: Modif
                         Column(Modifier.padding(12.dp)) {
                             Text("${set.actualReps ?: set.reps} reps × ${formatSessionPounds(set.weightGrams)} lbs", style = StatTypography.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize))
                             if (details.sessionState != null && set.actualReps != null) Text(
-                                "Planned: ${set.reps} reps · Active ${sessionTime(set.activeMillis)} · Break ${sessionTime(set.restMillis)}",
+                                "Planned: ${set.reps} reps · Work ${sessionTime(set.activeMillis)} · Rest ${sessionTime(set.restMillis)}",
                                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                             Row {
                                 TextButton(onClick = {

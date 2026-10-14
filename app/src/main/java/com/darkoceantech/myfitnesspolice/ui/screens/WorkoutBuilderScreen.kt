@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.scrollBy
@@ -417,7 +419,7 @@ private fun MetadataSummary(workout: Workout) {
             }
             MetadataRow("Workout name", workout.displayName(), R.drawable.ic_workout)
             HorizontalDivider(color = PoliceColors.Border)
-            MetadataRow("Target muscles", workout.targetMuscles.replace(",", ", ").ifBlank { "None selected" }, R.drawable.ic_workout)
+            MetadataRow("Target muscles", MuscleLabels.displayTags(workout.targetMuscles).replace(",", ", ").ifBlank { "None selected" }, R.drawable.ic_workout)
         }
     }
 }

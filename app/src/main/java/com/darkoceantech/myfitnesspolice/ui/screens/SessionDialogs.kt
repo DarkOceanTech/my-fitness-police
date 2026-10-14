@@ -24,8 +24,8 @@ internal fun ActualRepsDialog(set: WorkoutSet, action: SessionAction, onSave: (S
     AlertDialog(onDismissRequest = {}, title = { Text("Actual reps performed") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (cooldownRemaining != null) "Your one-minute cool-down has started. Save your results to see your workout summary while the timer continues."
-                else "Your break timer is running. How many reps did you complete?")
-            Text("Break · ${sessionTime(breakMillis)}", color = PoliceColors.LightBlue,
+                else "Your rest timer is running. How many reps did you complete?")
+            Text("Rest · ${sessionTime(breakMillis)}", color = PoliceColors.LightBlue,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("after-set-break-time"))
             if (cooldownRemaining != null) Text(if (cooldownRemaining == 0L) "Cool-down complete. Save reps to see your summary."
                 else "Cool-down · ${sessionTime(((cooldownRemaining + 999) / 1000) * 1000)} remaining",

@@ -28,7 +28,7 @@ object DashboardInsights {
         "Sessions belong to their local start date; weeks run Monday–Sunday. Selecting a date updates daily charts and the weekly/monthly window. " +
         "Weights are recorded external load in Lbs; body mass, movement distance and mechanical work are not estimated. " +
         "Warm-up sets contribute to load and time charts but are excluded from working-set, intensity, e1RM, PR and rep-range totals. " +
-        "Recorded breaks include the final cool-down. Missing timing is not inferred from wall-clock session duration. " +
+        "Recorded rest intervals include the final cool-down. Missing timing is not inferred from wall-clock session duration. " +
         "A missing baseline is unknown, never zero intensity. Grouped logs retain their original set records, counted once."
     val baselineContract = "Intensity uses the highest earlier Epley estimate for the same exercise from weighted working sets of 1–10 actual reps " +
         "in the preceding 90 days, before the selected set’s calendar day. A single rep uses the recorded load. " +
@@ -49,19 +49,25 @@ object DashboardInsights {
             "Review where working sets are distributed. Secondary muscles are not awarded additional sets, keeping stacks additive and avoiding double counting.",
             "The 2022 systematic review discusses roughly 12–20 weekly sets in young trained men, with muscle-specific and study limitations. Treat the requested 10–20 range as planning context, not an optimum or physiological fatigue threshold for everyone. The tonnage review is not a working-set safety guideline.",
             "A completed working set is not necessarily a hard set near failure. Compound lifts train multiple muscles; one main group is a reporting convention. No automatic fatigue or volume-limit diagnosis is made.", listOf(sets, tonnage))
-        "weekly-density" -> DashboardInsight("Bars = (recorded active milliseconds + recorded break milliseconds) / 60,000. Line = active / break. No break time gives an undefined ratio, shown as missing.",
+        "weekly-density" -> DashboardInsight("Stacked bars = Work time / 60,000 + Rest time / 60,000, in minutes. Line = Work / Rest. Zero Rest time gives an undefined ratio, shown as missing. The summary rounds Work + Rest to the nearest whole minute; calculations retain full precision.",
             "Compare recorded training time with its work/rest balance without folding pauses into lifting time.",
             "The two circuit studies varied interval durations while keeping a 1:1 ratio. They are separate articles. Duration and protocol context matter; the ratio by itself cannot establish a capacity drop or recovery quality.",
-            "Timing reflects button actions, not physiological measurements. Shorter breaks are not automatically better. Unlogged transitions and pauses are outside these bars.", listOf(fatigue, circuit))
-        "weekly-intensity" -> DashboardInsight("Count working sets by external weight / earlier estimated 1RM: Low <60%; Medium 60–85% inclusive; High >85%. Missing reference or zero external load = Unknown.",
-            "Review this week’s relative loading distribution. Unknown sets remain visible in the denominator.",
+            "Timing reflects button actions, not physiological measurements. Shorter rest intervals are not automatically better. Unlogged transitions and pauses are outside these bars.", listOf(fatigue, circuit))
+        "weekly-intensity" -> DashboardInsight("Eight horizontal 100% stacked bars show consecutive weeks using your week-start setting, oldest at the top. " +
+            "Each segment = zone working-set count / all eligible completed working sets that week × 100, including Unknown in the denominator. " +
+            "‘Percentage of Total Volume’ means working-set count here, not weight × reps or lifted tonnage. " +
+            "Classify external weight / highest eligible earlier estimated 1RM: Low <60%; Moderate 60–85% inclusive; High >85%. " +
+            "Missing reference or zero external load = Unknown. Weighted working sets with 2–10 actual reps use weight × (1 + reps / 30); singles use recorded weight. " +
+            "Percentages and legend counts exclude warm-ups; the selected week’s total sets includes eligible completed working and warm-up sets. " +
+            "Weeks with no working sets remain selectable with no percentage bar.",
+            "Compare relative loading distributions across eight weeks. Select a weekly row to see its total sets and zone counts.",
             "Plotkin et al. compared load progression with repetition progression over eight weeks. Both supported adaptations; small differences in rectus femoris growth and dynamic strength were uncertain. It did not validate these exact zone boundaries.",
             weeklyBaselineContract + " These boundaries are descriptive programming bins; a donut cannot prove that a periodization plan is optimal.", listOf(loads))
         "daily-fatigue" -> DashboardInsight("For the selected lift, order completed sets chronologically. Left axis = external load (Lbs); right axis = actual repetitions.",
             "Spot changes across a day’s sets and compare them with notes, set type, exercise setup and intended progression.",
             "Acute circuit studies provide context for work/rest and performance changes. Weight and rep traces alone do not measure internal neuromuscular fatigue or mechanical breakdown.",
             "Warm-ups, drop sets, supersets and deliberate load reductions can produce the same visual drop-off. This is a descriptive log, not a stamina-failure diagnosis.", listOf(fatigue))
-        "daily-time" -> DashboardInsight("Sum stored active lifting time and stored rest break time for completed sets on the selected date. Display each share of the recorded sum.",
+        "daily-time" -> DashboardInsight("Sum stored Work time and stored Rest time for completed sets on the selected date. Display each share of the recorded sum.",
             "Understand how recorded training minutes are allocated. Rest is part of training and recovery, not inherently non-productive time.",
             "Circuit work/rest duration influences acute physiological responses in controlled protocols. These results do not define a universally optimal lifting/rest split.",
             "Pauses, travel, warm-up activity outside the set timer and unrecorded time are excluded. Older records with no timing show an empty state rather than inferred slices.", listOf(circuit))
@@ -69,10 +75,10 @@ object DashboardInsights {
             "Compare prescribed loading choices within one movement. The visible reference is a comparison aid.",
             "The load/repetition progression trial supports multiple progression approaches; it does not establish a safety ceiling from a chart.",
             baselineContract + " A load above an estimate does not prove unsafe technique, and a load below it does not establish safety.", listOf(loads))
-        "daily-rest" -> DashboardInsight("Plot stored break milliseconds / 1,000 after each chronological completed set. A finished session can have a recorded zero-second break; an unresolved current break is missing.",
-            "Compare actual breaks with your intended pacing. Final cool-down and inter-exercise transitions are included where recorded.",
+        "daily-rest" -> DashboardInsight("Plot stored rest milliseconds / 1,000 after each chronological completed set. A finished session can have a recorded zero-second rest interval; an unresolved current rest interval is missing.",
+            "Compare actual rest intervals with your intended pacing. Final cool-down and inter-exercise transitions are included where recorded.",
             "Controlled circuit studies show that interval duration matters alongside the work/rest ratio. The chart does not measure discipline or physical decline.",
-            "Notes, equipment changes and interruptions can explain variation. Live breaks are not final until recorded by starting the next set or finishing.", listOf(circuit))
+            "Notes, equipment changes and interruptions can explain variation. Live rest intervals are not final until recorded by starting the next set or finishing.", listOf(circuit))
         "monthly-1rm" -> DashboardInsight("Epley estimate = weight × (1 + actual reps / 30). Use weighted working sets of 2–10 reps; singles use their recorded load. Plot the best eligible estimate per day.",
             "Track a consistent exercise’s estimated strength trend in the selected calendar month.",
             "The cited review concerns repeatability of direct 1RM tests. Reliability coefficients for tested maxima do not validate an Epley estimate or guarantee ICC >0.91 for every lift and population.",

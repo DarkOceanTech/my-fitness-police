@@ -52,7 +52,7 @@ class WeeklyMetricsRepositoryTest {
             val report = DashboardMetricsCalculator().calculate(input,
                 time(day) + 10 * 3_600_000L, day, zone = zone)
             val intensity = report.weekly.single { it.id == "weekly-intensity" }
-            assertEquals(listOf(0.0, 1.0, 0.0, 0.0), intensity.series.map { it.values.single() })
+            assertEquals(listOf(0.0, 1.0, 0.0, 0.0), intensity.series.map { it.values.last() })
             val volume = report.weekly.single { it.id == "weekly-volume" }
             assertEquals(8, volume.labels.size)
             assertEquals(8, volume.series.single().values.size)

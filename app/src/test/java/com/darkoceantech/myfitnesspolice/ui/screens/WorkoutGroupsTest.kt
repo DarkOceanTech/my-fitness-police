@@ -15,8 +15,8 @@ class WorkoutGroupsTest {
             workout("z", "Z rows", "Back", "Monday"),
             workout("a", "alpha rows", "Back", "Friday"),
             workout("abs", "Core light", "Abdominals", "Sunday")))
-        assertEquals(listOf("Abdominals", "Back", "Biceps"), groups.map { it.title })
-        assertEquals(listOf("a", "z"), groups[1].workouts.map { it.workout.id })
+        assertEquals(listOf("Abdominals", "Biceps", "Upper Back"), groups.map { it.title })
+        assertEquals(listOf("a", "z"), groups[2].workouts.map { it.workout.id })
     }
 
     @Test fun multiMuscleWorkoutsAppearOnceRegardlessOfSelectionOrderOrCase() {
@@ -24,8 +24,8 @@ class WorkoutGroupsTest {
             workout("one", "Strength", " Biceps,Back, biceps ,"),
             workout("two", "Light", "back,BICEPS"),
             workout("three", "Rows", "Back")))
-        assertEquals(listOf("Back", "Back, Biceps"), groups.map { it.title })
-        assertEquals(listOf("two", "one"), groups.last().workouts.map { it.workout.id })
+        assertEquals(listOf("Biceps, Upper Back", "Upper Back"), groups.map { it.title })
+        assertEquals(listOf("two", "one"), groups.first().workouts.map { it.workout.id })
         assertEquals(3, groups.sumOf { it.workouts.size })
     }
 
@@ -33,7 +33,7 @@ class WorkoutGroupsTest {
         assertTrue(groupWorkoutsByMuscle(emptyList()).isEmpty())
         val groups = groupWorkoutsByMuscle(listOf(
             workout("z", "", " "), workout("a", "", ""), workout("back", "", "Back")))
-        assertEquals(listOf("Back", "No target muscles"), groups.map { it.title })
-        assertEquals(listOf("a", "z"), groups.last().workouts.map { it.workout.id })
+        assertEquals(listOf("No target muscles", "Upper Back"), groups.map { it.title })
+        assertEquals(listOf("a", "z"), groups.first().workouts.map { it.workout.id })
     }
 }

@@ -1,5 +1,7 @@
 package com.darkoceantech.myfitnesspolice.ui.screens
 
+import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -126,7 +128,7 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
 
 @Composable
 private fun DirectExercisePlanSummary(planName: String, exercise: Exercise) {
-    val muscles = exercise.primaryMuscles.split(';', ',').map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+    val muscles = MuscleLabels.displayTags(exercise.primaryMuscles).split(';', ',').map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
         .ifBlank { exercise.mainMuscleGroup().takeIf { it != MuscleGroup.OTHER }?.label ?: "None selected" }
     Surface(Modifier.fillMaxWidth().testTag("training-direct-plan-details"), color = PoliceColors.Card, shape = PoliceCardShape,
         border = BorderStroke(1.dp, PoliceColors.Border)) {

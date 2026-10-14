@@ -25,8 +25,8 @@ class CurrentSessionNavigationTest {
                 compose.onNodeWithTag("return-to-active-workout").assertIsDisplayed()
                     .assert(hasText("Paused", substring = true))
                     .assert(hasText("Back training plan"))
-                    .assert(hasText("Active 0:30"))
-                    .assert(hasText("Break 0:00"))
+                    .assert(hasText("Work 0:30"))
+                    .assert(hasText("Rest 0:00"))
                     .assert(hasText("Return to workout").not()).performClick()
                 waitTag("active-workout-header")
                 compose.onNodeWithText("Paused back training").assertIsDisplayed()
@@ -68,8 +68,8 @@ class CurrentSessionNavigationTest {
             waitTag("return-to-active-workout")
             compose.onNodeWithTag("return-to-active-workout")
                 .assert(hasText("Back training plan"))
-                .assert(hasText("Active 0:00"))
-                .assert(hasText("Break 0:00"))
+                .assert(hasText("Work 0:00"))
+                .assert(hasText("Rest 0:00"))
             runBlocking { repo.sessionProgress.cancelUnstartedSession("session") }
             waitTag("return-to-active-workout", present = false)
             val newSession = runBlocking { repo.startPlan("plan") }

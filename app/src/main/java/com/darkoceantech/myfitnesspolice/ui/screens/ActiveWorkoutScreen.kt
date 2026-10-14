@@ -136,7 +136,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                             Text(if (progress.isPaused) "COOL-DOWN PAUSED" else "COOL-DOWN", color = PoliceColors.LightBlue,
                                 style = MaterialTheme.typography.labelLarge)
                             Text(if (editingSetDetails || equipmentId != null || noteId != null) "Save or close your edits to finish."
-                                else "Finishes automatically · counts as break time", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
+                                else "Finishes automatically · counts as rest time", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                         }
                         Text(sessionTime(((progress.cooldownRemainingMillis(now) + 999) / 1000) * 1000),
                             style = StatTypography.copy(fontSize = 22.sp), modifier = Modifier.testTag("cooldown-remaining"))
@@ -360,11 +360,11 @@ private fun SessionTimers(workout: WorkoutDetails, state: WorkoutSessionState, n
                 style = MaterialTheme.typography.labelSmall, color = PoliceColors.LightBlue)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("ACTIVE", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
+                    Text("WORK", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
                     Text(sessionTime(active), style = StatTypography.copy(fontSize = if (compact) 14.sp else 16.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("active-time"))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("BREAK", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
+                    Text("REST", Modifier.width(if (compact) 46.dp else 52.dp), style = MaterialTheme.typography.labelSmall, color = PoliceColors.Muted)
                     Text(sessionTime(rest), style = StatTypography.copy(fontSize = if (compact) 14.sp else 16.sp), maxLines = 1, softWrap = false, modifier = Modifier.testTag("break-time"))
                 }
             }

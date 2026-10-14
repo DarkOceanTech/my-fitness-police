@@ -46,7 +46,7 @@ internal enum class ProgressMetric(val label: String, val totalLabel: String, va
     Weight("Weight", "Lbs Lifted",
         "Total pounds lifted in workouts started this week: set weight × actual reps, added across recorded sets."),
     Activity("Activity", "minutes of Fun",
-        "Time spent investing into your sexy body in workouts started this week. Includes sets and breaks, excludes pauses, and updates during an active workout.");
+        "Time spent investing into your sexy body in workouts started this week. Includes sets and rest intervals, excludes pauses, and updates during an active workout.");
 
     fun chartValue(week: WeeklyProgressPoint): Double = when (this) {
         Sets -> week.sets.toDouble()
