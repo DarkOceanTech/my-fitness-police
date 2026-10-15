@@ -115,7 +115,7 @@ class DispatchSessionUpdateTest {
             }
             waitTag("workout-session-summary")
             compose.onNodeWithTag("summary-review-sets").performScrollTo().performClick()
-            compose.onNodeWithContentDescription("Info for set 1 of Cable row").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("View details for set 1 of Cable row").performScrollTo().performClick()
             verifySwiping("active")
             compose.onNodeWithTag("active-set-times").performScrollTo().assertIsDisplayed()
             screenshot("active-set-details")
@@ -124,7 +124,7 @@ class DispatchSessionUpdateTest {
             compose.onNodeWithText("Finish", substring = false).performClick()
             waitTag("history-detail")
             compose.onNode(hasText("Reports") and hasClickAction()).assertIsSelected()
-            compose.onNodeWithContentDescription("Info for set 1 of Cable row").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("View details for set 1 of Cable row").performScrollTo().performClick()
             verifySwiping("history")
             compose.onNodeWithTag("history-set-times").performScrollTo().assertIsDisplayed()
             screenshot("history-set-details")

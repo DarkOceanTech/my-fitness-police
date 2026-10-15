@@ -37,7 +37,7 @@ class EquipmentLibraryMigrationTest {
             }
             old.version = 16
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_16_17).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18).build()
         var db = open()
         try {
             val plan = db.workoutDao().getDetails("p")!!

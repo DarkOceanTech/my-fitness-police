@@ -33,6 +33,7 @@ internal fun RecordedSetInfoPanel(
     tagPrefix: String = "history", correctionAction: String = "correct-history-set",
     noteAction: String = "save-history-set-note", restMillis: Long = set.restMillis,
     activeMillis: Long = set.activeMillis, onNavigationLocked: (Boolean) -> Unit = {},
+    timeActions: @Composable () -> Unit = {}, timeAnnotation: String? = null,
 ) {
     val canEdit = set.completedAt != null
     val originalWeight = sessionPounds(set.weightGrams)
@@ -126,7 +127,8 @@ internal fun RecordedSetInfoPanel(
             }
             Surface(Modifier.fillMaxWidth().testTag("$tagPrefix-set-times"), shape = PoliceCardShape, color = PoliceColors.Card,
                 border = BorderStroke(1.dp, PoliceColors.Border)) {
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("Work" to activeMillis, "Rest" to restMillis, "Total" to activeMillis + restMillis).forEach { (label, duration) ->
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
@@ -134,6 +136,9 @@ internal fun RecordedSetInfoPanel(
                                 modifier = Modifier.testTag("$tagPrefix-set-${when (label) { "Work" -> "active"; "Rest" -> "break"; else -> label.lowercase() }}-time"))
                         }
                     }
+                    timeActions()
+                }
+                timeAnnotation?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = PoliceColors.LightBlue) }
                 }
             }
             if (navigationLocked) Text("Save or cancel editing to swipe to another set.",

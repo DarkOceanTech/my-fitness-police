@@ -15,7 +15,9 @@ import androidx.compose.ui.unit.sp
 import com.darkoceantech.myfitnesspolice.R
 
 @Composable
-fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier, onGroupWorkouts: (() -> Unit)? = null) {
+fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier, onGroupWorkouts: (() -> Unit)? = null,
+    model: SessionViewModel? = null) {
+    var timeReview by rememberSaveable { mutableStateOf(false) }
     var showDor by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().testTag("progress-history-home")) {
@@ -39,6 +41,10 @@ fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier, onGroupW
                 SectionLaunchCard("Workout Log", "Review completed workouts, sets, reps, and notes.",
                     R.drawable.ic_library, "progress-history-tile", onHistory)
             }
+            if (model != null) item(key = "time-review") {
+                SectionLaunchCard("Time Review", "Review flagged timer mistakes and corrected set durations.",
+                    R.drawable.ic_timer, "time-review-tile") { timeReview = true }
+            }
             item(key = "dor") {
                 SectionLaunchCard("DOR", "Daily Observation Report", R.drawable.ic_report, "reports-dor-tile") {
                     showDor = true
@@ -46,6 +52,7 @@ fun ReportsScreen(onHistory: () -> Unit, modifier: Modifier = Modifier, onGroupW
             }
         }
     }
+    if (timeReview && model != null) TimeReviewReport(model) { timeReview = false }
     if (showDor) FeatureConstructionDialog("DOR", R.drawable.ic_report,
         "The Daily Observation Report desk is still sorting its paperwork. Our officers are investigating who used the last pen.",
         homeTitle = "Reports", tagPrefix = "dor", onDismiss = { showDor = false })

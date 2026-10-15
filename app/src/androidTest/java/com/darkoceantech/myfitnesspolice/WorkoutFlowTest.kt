@@ -68,7 +68,7 @@ class WorkoutFlowTest {
             compose.onNodeWithTag("history-workout-" + workoutId).performClick()
             waitFor("Test squat")
             compose.onNodeWithText("Completed").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Info for set 1 of Test squat").assertIsDisplayed()
+            compose.onNodeWithContentDescription("View details for set 1 of Test squat").assertIsDisplayed()
             runBlocking {
                 val session = repository.observeSessions().first().single()
                 assertNotNull(session.workout.finishedAt)

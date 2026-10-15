@@ -13,7 +13,8 @@ class ActiveExerciseSwapRepository(private val database: FitnessDatabase) {
     suspend fun preview(exerciseId: String): ExerciseSessionSnapshot? = database.withTransaction {
         val entry = database.workoutExerciseDao().latestCompletedForExercise(exerciseId) ?: return@withTransaction null
         if (entry.sets.isEmpty()) return@withTransaction null
-        ExerciseSessionSnapshot(requireNotNull(database.workoutDao().getDetails(entry.workoutExercise.workoutId)), entry)
+        val effective = requireNotNull(database.workoutDao().getDetails(entry.workoutExercise.workoutId)).withEffectiveTimes()
+        ExerciseSessionSnapshot(effective, effective.exercises.first { it.workoutExercise.id == entry.workoutExercise.id })
     }
 
     suspend fun swap(workoutId: String, entryId: String, exerciseId: String, source: SwapSetSource,

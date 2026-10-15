@@ -204,6 +204,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                     tagPrefix = "active", onSelect = { infoId = it; model.clearError() },
                     onNavigationLocked = { editingSetDetails = it }) { detailSet, lock ->
                     RecordedSetInfoPanel(infoEntry.exercise.name, detailSet, action, Modifier.fillMaxSize(),
+                        timeActions = { SetTimeActions(model, workout, detailSet) },
+                        timeAnnotation = workout.timeAnnotation(detailSet.id),
                         tagPrefix = "active", correctionAction = "correct-active-set", noteAction = "save-active-set-note",
                         activeMillis = detailSet.activeMillis + if (progress.phase == "active" && progress.currentSetId == detailSet.id) progress.phaseMillis(now) else 0,
                         restMillis = detailSet.restMillis + if (progress.phase in listOf("rest", "cooldown") && progress.currentSetId == detailSet.id) progress.phaseMillis(now) else 0,
@@ -233,7 +235,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (landscape) 76.dp else 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         sessionNotices()
-                        ActiveExerciseCard(entry, workout, progress, !action.saving,
+                        ActiveExerciseCard(entry, workout, progress, !action.saving, timeModel = model,
                             onNote = { model.clearError(); noteId = entry.workoutExercise.id },
                             onEquipment = { model.clearError(); equipmentId = entry.workoutExercise.id },
                             onComplete = { model.completeActiveSet(workout.workout.id, it) },

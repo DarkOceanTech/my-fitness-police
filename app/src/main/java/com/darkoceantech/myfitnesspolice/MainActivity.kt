@@ -130,7 +130,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                                     onSelectedBack = if (historyFromLaunchpad) ({
                                         historyOpen = false; historySelection = null; selectDestination(AppDestinations.DISPATCH)
                                     }) else null)
-                                else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier,
+                                else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier, model = sessionModel,
                                     onGroupWorkouts = { sessionModel.clearError(); historyGrouping = true })
                             }
                             AppDestinations.PRECINCT -> PrecinctRoute(precinctSelection, onSelect = { precinctSelection = it }, modifier = screenModifier)

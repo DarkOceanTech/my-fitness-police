@@ -27,6 +27,7 @@ import java.math.RoundingMode
 @Composable
 internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails, progress: WorkoutSessionState?,
     enabled: Boolean, onNote: (() -> Unit)? = null,
+    timeModel: SessionViewModel? = null,
     onEquipment: (() -> Unit)? = null,
     onComplete: (String) -> Unit = {}, onStart: (String) -> Unit = {}, onInfo: (String) -> Unit,
     historyCollapsed: Boolean = false, onToggleHistoryCollapse: (() -> Unit)? = null,
@@ -36,10 +37,12 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
     showHistoryExerciseLabel: Boolean = true) {
     val history = workout.workout.finishedAt != null
     val sets = entry.sets.sortedBy { it.position }.filter { !history || it.completedAt != null }
+    val hasTimingIndicators = sets.any { it.completedAt != null && workout.timeReviewStatus(it) in listOf("needs_review", "corrected") }
     val currentInCard = !history && sets.any { it.id == progress?.currentSetId }
     val next = workout.nextSet(null)
     var menu by remember { mutableStateOf(false) }
     var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
+    var timeDetailsId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val options: @Composable () -> Unit = {
         Box {
             IconButton(onClick = { menu = true }, enabled = enabled,
@@ -113,6 +116,7 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
                                 color = PoliceColors.Muted, textAlign = TextAlign.Center)
                         }
+                        if (hasTimingIndicators) Spacer(Modifier.width(36.dp))
                         Spacer(Modifier.width(56.dp))
                     }
                     sets.forEach { set ->
@@ -132,15 +136,23 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                             SessionReadOnlyCell("${set.position + 1} " + if (set.isWarmup) "Wu" else "Ws",
                                 "Set type ${set.id}", completed, Modifier.weight(1f))
                             SessionReadOnlyCell(formatSessionPounds(set.weightGrams), "Session weight ${set.id}", completed, Modifier.weight(1f))
-                            SessionReadOnlyCell(set.reps.toString(), "Session reps ${set.id}", completed, Modifier.weight(1f))
+                            val repColor = if (completed && set.actualReps != null && set.actualReps != set.reps) repComparisonColor(set.reps, set.actualReps) else null
+                            SessionReadOnlyCell(set.reps.toString(), "Session reps ${set.id}", completed, Modifier.weight(1f), repColor)
                             SessionReadOnlyCell(set.actualReps?.toString() ?: if (completed) set.reps.toString() else "—",
-                                "Actual reps ${set.id}", completed, Modifier.weight(1f).testTag("actual-${set.id}"))
+                                "Actual reps ${set.id}", completed, Modifier.weight(1f).testTag("actual-${set.id}"), repColor)
+                            val timingStatus = workout.timeReviewStatus(set)
+                            if (completed && timingStatus in listOf("needs_review", "corrected")) IconButton(
+                                onClick = { if (timeModel != null) timeDetailsId = set.id else onInfo(set.id) }, enabled = enabled,
+                                modifier = Modifier.size(36.dp).testTag("set-time-indicator-${set.id}").semantics {
+                                    contentDescription = if (timingStatus == "needs_review") "Timing issue needs review" else "View time correction details"
+                                }) { SetTimeMark(timingStatus == "corrected") }
+                            else if (hasTimingIndicators) Spacer(Modifier.width(36.dp))
                             Button(onClick = { when { completed -> onInfo(set.id); isActive -> onComplete(set.id); else -> onStart(set.id) } },
                                 enabled = buttonEnabled,
                                 modifier = Modifier.width(56.dp).heightIn(min = 48.dp).testTag("set-action-${set.id}")
                                     .then(if (!completed && !isActive) Modifier.policeButtonSurface(buttonEnabled, RoundedCornerShape(14.dp)) else Modifier)
                                     .semantics { contentDescription = when {
-                                        completed -> "Info for set ${set.position + 1} of ${entry.exercise.name}"
+                                        completed -> "View details for set ${set.position + 1} of ${entry.exercise.name}"
                                         isActive -> "Complete set ${set.position + 1} of ${entry.exercise.name}"
                                         else -> "Start set ${set.position + 1} of ${entry.exercise.name}"
                                     } },
@@ -150,9 +162,11 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                                     contentColor = if (completed) PoliceColors.Muted else PoliceColors.Text,
                                     disabledContainerColor = PoliceColors.Raised, disabledContentColor = PoliceColors.Muted)) {
                                 if (completed) Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                    Box(Modifier.size(24.dp).border(1.5.dp, PoliceColors.Muted, androidx.compose.foundation.shape.CircleShape),
-                                        contentAlignment = Alignment.Center) { Text("i", fontSize = 16.sp) }
-                                    if (set.notes.isNotBlank()) SetNoteMark(Modifier.size(18.dp).align(Alignment.TopEnd)
+                                    Canvas(Modifier.size(24.dp).testTag("set-details-chevron-${set.id}")) {
+                                        val path = androidx.compose.ui.graphics.Path().apply { moveTo(size.width * .35f, size.height * .2f); lineTo(size.width * .65f, size.height * .5f); lineTo(size.width * .35f, size.height * .8f) }
+                                        drawPath(path, PoliceColors.Muted, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                                    }
+                                    if (set.notes.isNotBlank()) SetNoteMark(Modifier.size(16.dp).align(Alignment.TopStart)
                                         .testTag("set-note-indicator-${set.id}"))
                                 }
                                 else Text(if (isActive) "Done" else "Start", fontSize = 10.sp, maxLines = 1)
@@ -167,15 +181,16 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
         }
     }
     if (showInfo) ExerciseInfoDialog(entry.exercise, onDismiss = { showInfo = false })
+    if (timeDetailsId != null && timeModel != null) TimeCorrectionDialog(timeModel, workout.workout.id, timeDetailsId!!, "details") { timeDetailsId = null }
 }
 
 @Composable
-private fun SessionReadOnlyCell(value: String, description: String, muted: Boolean, modifier: Modifier) {
+private fun SessionReadOnlyCell(value: String, description: String, muted: Boolean, modifier: Modifier, valueColor: Color? = null) {
     Box(modifier.heightIn(min = 48.dp).semantics { contentDescription = description }
         .background(if (muted) PoliceColors.Raised.copy(alpha = .45f) else PoliceColors.Background, RoundedCornerShape(8.dp))
         .border(1.dp, PoliceColors.Border.copy(alpha = if (muted) .45f else 1f), RoundedCornerShape(8.dp)).padding(2.dp),
         contentAlignment = Alignment.Center) {
-        Text(value, style = StatTypography.copy(fontSize = 12.sp), color = if (muted) PoliceColors.Muted else PoliceColors.Text)
+        Text(value, style = StatTypography.copy(fontSize = 12.sp), color = valueColor ?: if (muted) PoliceColors.Muted else PoliceColors.Text)
     }
 }
 
@@ -195,5 +210,19 @@ private fun SetNoteMark(modifier: Modifier = Modifier) {
         drawLine(ink, androidx.compose.ui.geometry.Offset(size.width * .3f, size.height * .72f),
             androidx.compose.ui.geometry.Offset(size.width * .94f, size.height * .08f), stroke * 1.5f,
             cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun SetTimeMark(corrected: Boolean) {
+    Box(Modifier.size(28.dp)) {
+        Canvas(Modifier.size(24.dp)) {
+            val ink = if (corrected) PoliceColors.LightBlue else Color(0xFFFFBD59)
+            val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+            drawCircle(ink, size.minDimension * .4f, center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.8.dp.toPx()))
+            drawLine(ink, center, center.copy(y = size.height * .25f), 1.8.dp.toPx())
+            drawLine(ink, center, center.copy(x = size.width * .7f, y = size.height * .6f), 1.8.dp.toPx())
+        }
+        if (corrected) SetNoteMark(Modifier.size(14.dp).align(Alignment.BottomEnd))
     }
 }

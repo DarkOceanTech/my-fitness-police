@@ -7,14 +7,15 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
+    entities = [TimeCorrection::class, TimeReview::class, Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
         TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class,
         Gym::class, Equipment::class, NamedEquipmentSetup::class, StretchCatalogRow::class, StretchRoutineRow::class, StretchSessionRow::class, StretchPreferences::class],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 @androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class, EquipmentConfigurationConverters::class)
 abstract class FitnessDatabase : RoomDatabase() {
+    abstract fun timeCorrectionDao(): TimeCorrectionDao
     abstract fun equipmentLibraryDao(): EquipmentLibraryDao
     abstract fun stretchDao(): StretchDao
     abstract fun exerciseDao(): ExerciseDao
@@ -26,6 +27,23 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingScheduleDao(): TrainingScheduleDao
 
     companion object {
+        val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS time_corrections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, workoutId TEXT NOT NULL,
+                    workSetId TEXT NOT NULL, restSetId TEXT NOT NULL,
+                    recordedWork INTEGER NOT NULL, recordedRest INTEGER NOT NULL,
+                    beforeWork INTEGER NOT NULL, beforeRest INTEGER NOT NULL, afterWork INTEGER NOT NULL, afterRest INTEGER NOT NULL,
+                    source TEXT NOT NULL, provenance TEXT NOT NULL, reason TEXT NOT NULL, workLabel TEXT NOT NULL, restLabel TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL, applied INTEGER NOT NULL,
+                    FOREIGN KEY(workoutId) REFERENCES workouts(id) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_time_corrections_workoutId ON time_corrections(workoutId)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS time_reviews (setId TEXT NOT NULL PRIMARY KEY, workoutId TEXT NOT NULL,
+                    status TEXT NOT NULL, updatedAt INTEGER NOT NULL,
+                    FOREIGN KEY(workoutId) REFERENCES workouts(id) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_time_reviews_workoutId ON time_reviews(workoutId)")
+            }
+        }
         val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS gyms (id TEXT NOT NULL, name TEXT NOT NULL, isArchived INTEGER NOT NULL, PRIMARY KEY(id))")
@@ -242,7 +260,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }

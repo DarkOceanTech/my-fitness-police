@@ -118,6 +118,8 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
                 SetDetailsPager(infoEntry.sets.filter { it.completedAt != null }.sortedBy { it.position }, infoSet.id,
                     !action.saving, Modifier.weight(1f), tagPrefix = "history", onSelect = { infoId = it; model.clearError() }) { detailSet, lock ->
                     RecordedSetInfoPanel(infoEntry.exercise.name, detailSet, action, Modifier.fillMaxSize(),
+                        timeActions = { SetTimeActions(model, infoOwner.workout, detailSet) },
+                        timeAnnotation = infoOwner.workout.timeAnnotation(detailSet.id),
                         onNavigationLocked = lock, onEdit = model::clearError,
                         onSave = { pounds, planned, actual, rpe, warmup -> model.correctHistorySet(infoOwner.workout.workout.id, detailSet.id, pounds, planned, actual, rpe, warmup) },
                         onSaveNote = { model.saveHistorySetNote(infoOwner.workout.workout.id, detailSet.id, it) },
@@ -152,7 +154,7 @@ fun WorkoutHistoryScreen(model: SessionViewModel, selectedId: String?, onSelect:
                     if (selectedGroup.isGrouped && (index == 0 || entries[index - 1].workout.workout.id != item.workout.workout.id)) {
                         Text(item.workout.workout.displayName(), style = MaterialTheme.typography.titleSmall, color = PoliceColors.LightBlue)
                     }
-                    ActiveExerciseCard(entry, item.workout, item.workout.sessionState, !action.saving,
+                    ActiveExerciseCard(entry, item.workout, item.workout.sessionState, !action.saving, timeModel = model,
                         onNote = { model.clearError(); noteEntryId = entry.workoutExercise.id },
                         onInfo = { model.clearError(); infoId = it },
                         historyCollapsed = entry.workoutExercise.id in collapsedEntryIds,

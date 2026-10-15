@@ -27,6 +27,7 @@ data class LastSessionState(val loading: Boolean = false, val snapshot: Exercise
     val error: String? = null, val history: List<ExerciseSessionSnapshot> = emptyList())
 
 class SessionViewModel(private val repository: FitnessRepository) : ViewModel() {
+    val timeCorrections get() = repository.timeCorrections
     private val _swapPreview = MutableStateFlow(LastSessionState())
     val swapPreview = _swapPreview.asStateFlow()
     private var swapPreviewJob: Job? = null
@@ -89,6 +90,8 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
     }
     private val _automaticallyFinishedWorkout = MutableStateFlow<String?>(null)
     val automaticallyFinishedWorkout = _automaticallyFinishedWorkout.asStateFlow()
+    private var timeReviewCount = 0
+    fun holdTimeReview(open: Boolean) { timeReviewCount = (timeReviewCount + if (open) 1 else -1).coerceAtLeast(0) }
     private var autoFinishDeferred = false
     fun deferAutoFinish(deferred: Boolean) { autoFinishDeferred = deferred }
     fun acknowledgeAutomaticFinish(id: String) {
@@ -104,7 +107,7 @@ class SessionViewModel(private val repository: FitnessRepository) : ViewModel() 
                 val cooling = current.sessions.firstOrNull { it.workout.kind == "session" && it.workout.finishedAt == null &&
                     it.sessionState?.let { session -> session.phase == "cooldown" && !session.isPaused &&
                         !session.awaitingActual && session.cooldownRemainingMillis(now) == 0L } == true }
-                if (cooling != null && !autoFinishDeferred && !_action.value.saving && now >= retryAfter) {
+                if (cooling != null && !autoFinishDeferred && timeReviewCount == 0 && !_action.value.saving && now >= retryAfter) {
                     retryAfter = now + 5000 // Avoid hammering storage if saving fails.
                     perform("auto-finish-session") {
                         if (repository.sessionProgress.finishCooldownIfReady(cooling.workout.id)) {

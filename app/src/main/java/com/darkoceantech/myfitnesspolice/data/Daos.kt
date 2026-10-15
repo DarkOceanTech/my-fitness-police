@@ -38,6 +38,8 @@ data class WorkoutDetails(
     val exercises: List<ExerciseWithSets>,
     @Relation(parentColumn = "id", entityColumn = "workoutId")
     val sessionState: WorkoutSessionState? = null,
+    @Relation(parentColumn = "id", entityColumn = "workoutId") val timeCorrections: List<TimeCorrection> = emptyList(),
+    @Relation(parentColumn = "id", entityColumn = "workoutId") val timeReviews: List<TimeReview> = emptyList(),
 ) {
     // Room relations do not guarantee order.
     fun orderedExercises() = exercises.sortedBy { it.workoutExercise.position }

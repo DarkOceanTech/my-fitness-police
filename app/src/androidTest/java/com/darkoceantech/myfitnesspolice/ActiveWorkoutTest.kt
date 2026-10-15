@@ -84,7 +84,7 @@ class ActiveWorkoutTest {
             compose.onNodeWithTag("session-set-${sets[0].id}")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Recorded, read only"))
             screenshot("break-timer")
-            compose.onNodeWithContentDescription("Info for set 1 of Dumbbell Row").performClick()
+            compose.onNodeWithContentDescription("View details for set 1 of Dumbbell Row").performClick()
             compose.onNodeWithTag("duty-time").assertIsDisplayed()
             compose.onNodeWithTag("active-exercise-pager").assertDoesNotExist()
             compose.onNodeWithTag("active-set-actual").assertHasNoClickAction()
@@ -159,7 +159,7 @@ class ActiveWorkoutTest {
                 val plan = repo.observeWorkout(planId).first()!!
                 assertTrue(plan.orderedSets().all { it.actualReps == null && it.completedAt == null && it.activeMillis == 0L })
             }
-            compose.onNodeWithContentDescription("Info for set 1 of Dumbbell Row").performClick()
+            compose.onNodeWithContentDescription("View details for set 1 of Dumbbell Row").performClick()
             compose.onNodeWithTag("edit-history-set").performScrollTo().performClick()
             compose.onNodeWithTag("history-set-actual").performScrollTo().performClick()
             compose.onNodeWithTag("history-set-actual-options").performScrollToNode(hasText("8"))

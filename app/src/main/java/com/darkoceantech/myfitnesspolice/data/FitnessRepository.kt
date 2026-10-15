@@ -2,8 +2,10 @@ package com.darkoceantech.myfitnesspolice.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class FitnessRepository(private val database: FitnessDatabase) {
+    val timeCorrections = TimeCorrectionRepository(database)
     val equipmentLibrary = EquipmentLibraryRepository(database)
     val stretches = StretchRepository(database)
     val sessionProgress = WorkoutSessionRepository(database)
@@ -340,7 +342,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
         require(workout.finishedAt != null) { "Only completed workouts can be deleted from Workout Log." }
         database.workoutDao().delete(id)
     }
-    fun observeSessions() = database.workoutDao().observeAllDetails()
+    fun observeSessions() = database.workoutDao().observeAllDetails().map { list -> list.map { it.withEffectiveTimes() } }
 
     private suspend fun requireNoUnfinishedSession() {
         require(database.stretchDao().active() == null) { "Finish or cancel your active stretch routine before starting strength training." }
@@ -402,7 +404,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
             val workout = workouts.getOrPut(entry.workoutExercise.workoutId) {
                 recordedWorkout(entry.workoutExercise.workoutId)
             }
-            ExerciseSessionSnapshot(workout, entry)
+            ExerciseSessionSnapshot(workout.withEffectiveTimes(), workout.withEffectiveTimes().exercises.first { it.workoutExercise.id == entry.workoutExercise.id })
         }
     }
 
@@ -416,7 +418,8 @@ class FitnessRepository(private val database: FitnessDatabase) {
         val source = requireNotNull(database.workoutExerciseDao().latestCompletedForExercise(entry.exercise.id)) {
             "No completed session was found for ${entry.exercise.name}. Your current sets have not changed."
         }
-        ExerciseSessionSnapshot(recordedWorkout(source.workoutExercise.workoutId), source)
+        recordedWorkout(source.workoutExercise.workoutId).withEffectiveTimes().let { effective ->
+            ExerciseSessionSnapshot(effective, effective.exercises.first { it.workoutExercise.id == source.workoutExercise.id }) }
     }
 
     suspend fun editActivePlannedSets(workoutId: String, entryId: String, changes: List<PlannedSetUpdate>) = database.withTransaction {
@@ -530,7 +533,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
     fun observeExercises() = database.exerciseDao().observeActive()
     fun observeHistory() = database.workoutDao().observeHistory()
     fun observeUnfinished() = database.workoutDao().observeUnfinished()
-    fun observeWorkout(id: String) = database.workoutDao().observeDetails(id)
+    fun observeWorkout(id: String) = database.workoutDao().observeDetails(id).map { it?.withEffectiveTimes() }
 
     suspend fun addExercise(name: String, equipment: String, description: String = "",
         primaryMuscles: String = "", secondaryMuscles: String = "", equipmentDefault: EquipmentConfiguration? = null) = database.withTransaction {

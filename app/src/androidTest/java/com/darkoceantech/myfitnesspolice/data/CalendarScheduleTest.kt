@@ -80,7 +80,7 @@ class CalendarScheduleTest {
             old.execSQL("INSERT INTO workout_session_states (workoutId, phase, currentSetId, phaseElapsedMillis, dutyElapsedMillis, isPaused, awaitingActual, pauseReason) VALUES ('log', 'finished', 'set', 0, 1000, 0, 0, '')")
             old.version = 14
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18).build()
         var db = open()
         try {
             assertEquals(17, db.openHelper.writableDatabase.version)
