@@ -12,5 +12,7 @@ fun formatWeight(pounds: BigDecimal): String = DecimalFormat("#,##0", DecimalFor
 }.format(pounds)
 
 fun formatWeight(pounds: Double): String = formatWeight(BigDecimal.valueOf(pounds))
-fun formatPoundsText(value: String): String = value.toBigDecimalOrNull()?.let(::formatWeight) ?: value
+fun formatPoundsText(value: String): String = value.toBigDecimalOrNull()?.let {
+    DecimalFormat("#,##0.##", DecimalFormatSymbols(Locale.US)).format(it)
+} ?: value
 fun formatSessionPounds(grams: Long): String = formatWeight(BigDecimal.valueOf(grams).divide(BigDecimal("453.59237"), 9, RoundingMode.HALF_UP))

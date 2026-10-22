@@ -274,7 +274,7 @@ class FitnessRepository(private val database: FitnessDatabase) {
             }
             is TrainingPlanItem.ExerciseItem -> {
                 val exercise = equipmentLibrary.sessionCopy(WorkoutExercise(workoutId = session.id, exerciseId = item.exerciseId, position = position++,
-                    equipmentOverride = item.equipmentOverride), direct.getValue(item.exerciseId).exercise)
+                    equipmentOverride = item.equipmentOverride, notes = item.notes), direct.getValue(item.exerciseId).exercise)
                 database.workoutExerciseDao().insert(exercise)
                 item.sets.forEachIndexed { setPosition, set ->
                     database.workoutSetDao().insert(WorkoutSet(workoutExerciseId = exercise.id, position = setPosition,

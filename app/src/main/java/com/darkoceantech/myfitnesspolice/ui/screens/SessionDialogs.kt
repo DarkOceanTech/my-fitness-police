@@ -50,11 +50,10 @@ internal fun ActualRepsDialog(set: WorkoutSet, action: SessionAction, onSave: (S
         } },
         confirmButton = { TextButton(onClick = { onSave(actual, rpe, note) }, enabled = !action.saving) { Text("Save reps") } },
         dismissButton = { TextButton(onClick = onPause, enabled = !action.saving) { Text("Pause workout") } })
-    if (editingNote) AlertDialog(onDismissRequest = { editingNote = false }, title = { Text("Set note") },
-        text = { OutlinedTextField(noteDraft, { noteDraft = it }, label = { Text("Set notes") }, minLines = 3, maxLines = 5,
-            modifier = Modifier.fillMaxWidth().testTag("after-set-note-input")) },
-        confirmButton = { TextButton(onClick = { note = noteDraft.trim(); editingNote = false }) { Text("Save note") } },
-        dismissButton = { TextButton(onClick = { editingNote = false }) { Text("Cancel") } })
+    if (editingNote) FullScreenNoteEditor("Set note", noteDraft, { noteDraft = it },
+        onDismiss = { editingNote = false }, onSave = { note = noteDraft.trim(); editingNote = false },
+        label = "Set notes", tag = "after-set-note-editor", inputTag = "after-set-note-input")
+
 }
 
 @Composable
@@ -74,12 +73,6 @@ internal fun PauseReasonDialog(reason: String, action: SessionAction, onDismiss:
 @Composable
 internal fun SessionNoteDialog(note: String, action: SessionAction, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf(note) }
-    AlertDialog(onDismissRequest = { if (!action.saving) onDismiss() }, title = { Text("Edit note") },
-        text = { Column {
-            OutlinedTextField(text, { text = it }, label = { Text("Exercise note") }, enabled = !action.saving,
-                modifier = Modifier.heightIn(max = 240.dp))
-            action.error?.let { Text(it, color = PoliceColors.Error) }
-        } },
-        confirmButton = { TextButton(onClick = { onSave(text) }, enabled = !action.saving) { Text("Save note") } },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !action.saving) { Text("Cancel") } })
+    FullScreenNoteEditor("Edit note", text, { text = it }, onDismiss, { onSave(text) }, action,
+        tag = "session-note-editor")
 }

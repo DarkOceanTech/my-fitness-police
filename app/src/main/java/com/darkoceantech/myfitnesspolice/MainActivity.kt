@@ -4,6 +4,8 @@ import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
@@ -74,12 +76,27 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
             sessionModel.acknowledgeAutomaticFinish(id)
         }
     }
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    var tabBackRequested by remember { mutableStateOf(false) }
+    // Registered before screen handlers: absorb tab reselection only at a landing page.
+    // Child handlers retain their usual unsaved-change and active-session safeguards.
+    BackHandler(enabled = tabBackRequested) { }
+    LaunchedEffect(tabBackRequested) {
+        if (tabBackRequested) {
+            backDispatcher?.onBackPressed()
+            tabBackRequested = false
+        }
+    }
     fun selectDestination(destination: AppDestinations) {
         historyFromLaunchpad = false
         historyGrouping = false
         settingsOpen = false
         trainingVisible = false
         currentDestination = destination
+    }
+    fun selectNavigationTab(destination: AppDestinations) {
+        if (destination == currentDestination) tabBackRequested = true
+        else selectDestination(destination)
     }
     fun returnToSession() {
         settingsOpen = false
@@ -109,7 +126,7 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                             }
                             AppDestinations.ACADEMY -> WorkoutHomeRoute(sessionModel, exercisesModel, screenModifier,
                                 requestedPlanId = launchPlanId, requestedScheduleDate = dispatchDay, onPlanRequestHandled = { launchPlanId = null },
-                                onReturnToLaunchpad = { selectDestination(AppDestinations.DISPATCH) },
+                                onReturnToLaunchpad = { if (!tabBackRequested) selectDestination(AppDestinations.DISPATCH) },
                                 trainingVisible = trainingVisible, onTrainingVisibleChange = { trainingVisible = it },
                                 timedSessionActive = mobilitySession != null,
                                 onFinished = { id ->
@@ -128,7 +145,9 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                                     onBack = { historyOpen = false; historySelection = null },
                                     selectedBackLabel = if (historyFromLaunchpad) "Back to Daily Blotter" else null,
                                     onSelectedBack = if (historyFromLaunchpad) ({
-                                        historyOpen = false; historySelection = null; selectDestination(AppDestinations.DISPATCH)
+                                        historySelection = null
+                                        if (tabBackRequested) historyFromLaunchpad = false
+                                        else { historyOpen = false; selectDestination(AppDestinations.DISPATCH) }
                                     }) else null)
                                 else ReportsScreen(onHistory = { historyOpen = true }, modifier = screenModifier, model = sessionModel,
                                     onGroupWorkouts = { sessionModel.clearError(); historyGrouping = true })
@@ -144,9 +163,9 @@ fun MyFitnessPoliceApp(repository: com.darkoceantech.myfitnesspolice.data.Fitnes
                             selectDestination(AppDestinations.PTO); ptoSelection = PtoActivity.TIMER; requestedMobilitySession = mobilitySession.id
                         })
                     }
-                    if (!landscapeSession) PoliceBottomNavigation(currentDestination, ::selectDestination)
+                    if (!landscapeSession) PoliceBottomNavigation(currentDestination, ::selectNavigationTab)
                 }
-                if (landscapeSession) LandscapeWorkoutNavigation(currentDestination, ::selectDestination,
+                if (landscapeSession) LandscapeWorkoutNavigation(currentDestination, ::selectNavigationTab,
                     Modifier.align(Alignment.BottomStart))
             }
         }

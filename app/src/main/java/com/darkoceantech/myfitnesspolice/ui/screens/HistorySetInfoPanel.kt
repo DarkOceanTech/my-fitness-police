@@ -67,10 +67,6 @@ internal fun RecordedSetInfoPanel(
             revision = action.revision
         }
     }
-    val weights = remember(originalWeight) {
-        ((0..600).map { BigDecimal.valueOf(it * 25L, 1).stripTrailingZeros().toPlainString() } + originalWeight)
-            .distinct().sortedBy { it.toBigDecimal() }
-    }
     val plannedOptions = remember(set.reps) { ((1..500).map { it.toString() } + set.reps.toString()).distinct().sortedBy { it.toInt() } }
     val actualOptions = remember(originalActual) { ((0..500).map { it.toString() } + originalActual).distinct().sortedBy { it.toInt() } }
     val rpeOptions = remember { (1..10).map { it.toString() } }
@@ -107,9 +103,9 @@ internal fun RecordedSetInfoPanel(
                     SirenRule(Modifier.fillMaxWidth())
                     if (!canEdit) Text("This set hasn’t been recorded yet.", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RecordedNumberField("Weight (Lbs)", if (editing) weight else originalWeight, weights, editing,
+                        RecordedNumberField("Weight (Lbs)", if (editing) weight else originalWeight, emptyList(), editing,
                             "$tagPrefix-set-weight", Modifier.weight(1f), enabled = !action.saving,
-                            formatValue = ::formatPoundsText) { weight = it; onEdit() }
+                            formatValue = ::formatPoundsText, weightInput = true) { weight = it; onEdit() }
                         RecordedNumberField("RPE", (if (editing) rpe else set.rpe)?.toString() ?: "—", rpeOptions,
                             editing, "$tagPrefix-set-rpe", Modifier.weight(1f), enabled = !action.saving) { rpe = it.toInt(); onEdit() }
                     }
@@ -164,17 +160,11 @@ internal fun RecordedSetInfoPanel(
             Spacer(Modifier.height(8.dp))
         }
     }
-    if (noteDialog) AlertDialog(onDismissRequest = { if (!action.saving) noteDialog = false },
-        title = { Text("Set note") }, containerColor = PoliceColors.Card,
-        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(exerciseName, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
-            OutlinedTextField(note, { note = it; onEdit() }, label = { Text("Set notes") }, minLines = 3, maxLines = 6,
-                enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-set-note-input"))
-            action.error?.let { Text(it, color = PoliceColors.Error) }
-        } },
-        confirmButton = { TextButton(onClick = { onSaveNote(note) }, enabled = !action.saving,
-            modifier = Modifier.testTag("save-$tagPrefix-set-note")) { Text("Save") } },
-        dismissButton = { TextButton(onClick = { noteDialog = false }, enabled = !action.saving) { Text("Cancel") } })
+    if (noteDialog) FullScreenNoteEditor("Set note", note, { note = it; onEdit() },
+        onDismiss = { noteDialog = false }, onSave = { onSaveNote(note) }, action = action,
+        label = "Set notes", subtitle = exerciseName, tag = "$tagPrefix-set-note-editor",
+        inputTag = "$tagPrefix-set-note-input", saveTag = "save-$tagPrefix-set-note", saveLabel = "Save")
+
 }
 
 @Composable
@@ -212,7 +202,7 @@ private fun RecordedSetTypeHeading(
 @Composable
 internal fun RecordedNumberField(label: String, value: String, options: List<String>, editable: Boolean,
     tag: String, modifier: Modifier, enabled: Boolean = true, valueColor: Color = PoliceColors.Text,
-    formatValue: (String) -> String = { it },
+    formatValue: (String) -> String = { it }, weightInput: Boolean = false,
     onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,10 +215,11 @@ internal fun RecordedNumberField(label: String, value: String, options: List<Str
                 border = if (editable) BorderStroke(1.dp, PoliceColors.LightBlue) else null) {
                 Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(formatValue(value), style = StatTypography.copy(fontSize = 24.sp), color = valueColor)
-                    if (editable) Text("↕", color = PoliceColors.LightBlue)
+                    if (editable && !weightInput) Text("↕", color = PoliceColors.LightBlue)
                 }
             }
-            DropdownMenu(expanded && editable && enabled, onDismissRequest = { expanded = false }) {
+            if (weightInput && expanded && editable && enabled) WeightKeypad(value, onDismiss = { expanded = false }, onSave = { onSelect(it); expanded = false })
+            DropdownMenu(expanded && editable && enabled && !weightInput, onDismissRequest = { expanded = false }) {
                 val scroll = rememberLazyListState(initialFirstVisibleItemIndex = (options.indexOf(value) - 2).coerceAtLeast(0))
                 LazyColumn(Modifier.width(200.dp).height(240.dp).testTag("$tag-options"), state = scroll) {
                     items(options, key = { it }) { option ->

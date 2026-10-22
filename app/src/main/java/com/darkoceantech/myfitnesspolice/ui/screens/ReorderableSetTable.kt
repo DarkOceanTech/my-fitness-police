@@ -230,9 +230,7 @@ private fun PlannedSetRow(set: WorkoutSet, index: Int, exerciseName: String, ena
             Modifier.weight(1f), label = { if (it == "warmup") "Wu" else "Ws" },
             fullName = { if (it == "warmup") "Warm-up" else "Working set" }) { onChange(set.id, "type", it) }
         val weight = sessionPounds(set.weightGrams)
-        val weights = remember(weight) { ((0..600).map { BigDecimal.valueOf(it * 25L, 1).stripTrailingZeros().toPlainString() } + weight)
-            .distinct().sortedBy { it.toBigDecimal() } }
-        TablePicker("Weight set ${index + 1}", weight, weights, enabled, Modifier.weight(1f), label = ::formatPoundsText) {
+        TablePicker("Weight set ${index + 1}", weight, emptyList(), enabled, Modifier.weight(1f), label = ::formatPoundsText, weightInput = true) {
             if (it != weight) onChange(set.id, "weight", it)
         }
         val reps = remember(set.reps) { ((1..100).map { it.toString() } + set.reps.toString()).distinct().sortedBy { it.toInt() } }

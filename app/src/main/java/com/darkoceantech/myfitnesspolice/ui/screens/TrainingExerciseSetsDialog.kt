@@ -3,6 +3,9 @@ package com.darkoceantech.myfitnesspolice.ui.screens
 import com.darkoceantech.myfitnesspolice.domain.muscles.MuscleLabels
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,19 +43,36 @@ private val DirectPlanSetRowsSaver = listSaver<List<DirectPlanSetRow>, String>(
 @Composable
 internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, planName: String, exercise: Exercise,
     saving: Boolean, error: String?, onDismiss: () -> Unit, onSave: (List<TrainingPlanSet>) -> Unit,
-    onSaveWithEquipment: ((List<TrainingPlanSet>, EquipmentConfiguration?) -> Unit)? = null) {
+    onSaveWithEquipment: ((List<TrainingPlanSet>, EquipmentConfiguration?) -> Unit)? = null,
+    library: List<WorkoutDetails> = emptyList(), onRemove: () -> Unit = {}, canRemove: Boolean = true,
+    onSaveDetails: ((List<TrainingPlanSet>, EquipmentConfiguration?, String) -> Unit)? = null) {
     var rows by rememberSaveable(item.exerciseId, stateSaver = DirectPlanSetRowsSaver) {
         mutableStateOf(item.sets.map { DirectPlanSetRow(prescription = it) })
     }
+    var note by rememberSaveable(item.exerciseId) { mutableStateOf(item.notes) }
+    var noteDraft by rememberSaveable(item.exerciseId) { mutableStateOf(item.notes) }
+    var editingNote by rememberSaveable { mutableStateOf(false) }
     var config by rememberSaveable(item.exerciseId, stateSaver = EquipmentConfigurationSaver) { mutableStateOf(item.equipmentOverride ?: exercise.equipmentDefault ?: EquipmentConfiguration()) }
     var override by rememberSaveable(item.exerciseId) { mutableStateOf(item.equipmentOverride != null) }
+    var viewingLastSession by rememberSaveable { mutableStateOf(false) }
     var setupEditor by rememberSaveable { mutableStateOf(false) }
     var setupError by remember { mutableStateOf<String?>(null) }
     val equipmentDirty = (if (override) config else null) != item.equipmentOverride
     var dragging by remember { mutableStateOf(false) }
     val prescriptions = rows.map { it.prescription }
-    val dirty = prescriptions != item.sets || equipmentDirty
+    val dirty = prescriptions != item.sets || equipmentDirty || note != item.notes
     val enabled = !saving && !dragging
+    var leaving by rememberSaveable { mutableStateOf(false) }
+    fun saveChanges() {
+        if (onSaveDetails != null) onSaveDetails(prescriptions, if (override) config else null, note)
+        else if (onSaveWithEquipment != null) onSaveWithEquipment(prescriptions, if (override) config else null)
+        else onSave(prescriptions)
+    }
+    fun requestBack() {
+        if (enabled) {
+            if (dirty) leaving = true else onDismiss()
+        }
+    }
     val entryId = "training-direct-${item.exerciseId}"
     val entry = ExerciseWithSets(WorkoutExercise(entryId, "training-local", exercise.id, 0), exercise,
         rows.mapIndexed { index, row -> WorkoutSet(row.id, entryId, index, row.prescription.reps,
@@ -67,10 +87,10 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
             else -> row.prescription
         }) }
     }
-    WorkoutEditorDialog("Edit exercise sets", "training-exercise-sets", !saving, onDismiss, fullScreen = true, footer = {
+    WorkoutEditorDialog("Edit exercise sets", "training-exercise-sets", enabled, ::requestBack, fullScreen = true, footer = {
         PoliceOutlinedButton(onClick = onDismiss, enabled = enabled, modifier = Modifier.weight(1f)
             .testTag("cancel-training-exercise-sets")) { Text("Cancel") }
-        PoliceButton(onClick = { if (onSaveWithEquipment != null) onSaveWithEquipment(prescriptions, if (override) config else null) else onSave(prescriptions) }, enabled = enabled && dirty && prescriptions.isNotEmpty(),
+        PoliceButton(onClick = ::saveChanges, enabled = enabled && dirty && prescriptions.isNotEmpty(),
             modifier = Modifier.weight(1f).testTag("save-training-exercise-sets")) { Text(if (saving) "Saving…" else "Save") }
     }) {
         val listState = rememberLazyListState()
@@ -88,8 +108,7 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
                 Surface(Modifier.fillMaxWidth().testTag("training-direct-exercise-card"), color = PoliceColors.Card,
                     contentColor = PoliceColors.Text, shape = PoliceCardShape, border = BorderStroke(1.dp, PoliceColors.Border)) {
                     Column {
-                        SirenRule(Modifier.fillMaxWidth())
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ShieldMark(Modifier.size(44.dp).padding(4.dp))
                                 Column(Modifier.weight(1f)) {
@@ -97,9 +116,16 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
                                     if (exercise.equipment.isNotBlank()) Text(exercise.equipment,
                                         style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                                 }
+                                BuilderExerciseMenu(entry, enabled, onEquipment = { setupEditor = true },
+                                    onViewLastSession = { viewingLastSession = true }, onRemove = onRemove,
+                                    removalContext = "training plan", canRemove = canRemove)
                             }
                             EquipmentConfigurationSummary(if (override) config else exercise.equipmentDefault)
-                            if (LocalEquipmentLibraryModel.current != null) OutlinedButton(onClick = { setupEditor = true }, enabled = enabled) { Text("Edit equipment setup") }
+                            Text(note.ifBlank { "Add a note prior to workout" },
+                                modifier = Modifier.fillMaxWidth().testTag("training-exercise-note")
+                                    .border(1.dp, PoliceColors.Border, RoundedCornerShape(10.dp))
+                                    .clickable(enabled = enabled, onClickLabel = "Edit note") { noteDraft = note; editingNote = true }
+                                    .heightIn(min = 48.dp).padding(12.dp), style = MaterialTheme.typography.bodySmall)
                             ReorderableSetTable(entry, !saving, SessionAction(saving = saving, error = error), listState, viewport,
                                 onDragState = { dragging = it }, onReorder = { ids -> rows = ids.map { id -> rows.single { it.id == id } } },
                                 onDeleteSet = { id -> rows = rows.filterNot { it.id == id } }, onChange = ::change)
@@ -117,6 +143,54 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
             }
             if (error != null) item(key = "error") { Text(error, color = PoliceColors.Error, style = MaterialTheme.typography.bodySmall) }
         }
+    }
+    if (leaving) AlertDialog(
+        onDismissRequest = { if (!saving) leaving = false },
+        title = { Text("Save your changes?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Save this exercise's sets and note before leaving, discard your changes, or continue editing.")
+                if (prescriptions.isEmpty()) Text("Add at least one set before saving.", color = PoliceColors.Muted)
+                error?.let { Text(it, color = PoliceColors.Error) }
+            }
+        },
+        confirmButton = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PoliceButton(onClick = ::saveChanges, enabled = enabled && prescriptions.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().testTag("save-training-exercise-and-exit")) {
+                    Text(if (saving) "Saving…" else "Save changes")
+                }
+                TextButton(onClick = onDismiss, enabled = !saving,
+                    modifier = Modifier.fillMaxWidth().testTag("discard-training-exercise-changes")) {
+                    Text("Exit without saving", color = PoliceColors.Error)
+                }
+                TextButton(onClick = { leaving = false }, enabled = !saving,
+                    modifier = Modifier.fillMaxWidth().testTag("continue-editing-training-exercise")) {
+                    Text("Continue editing")
+                }
+            }
+        }
+    )
+    if (editingNote) FullScreenNoteEditor("Edit exercise note", noteDraft, { noteDraft = it },
+        onDismiss = { editingNote = false }, onSave = { note = noteDraft; editingNote = false },
+        subtitle = exercise.name, tag = "training-exercise-note-editor")
+    if (viewingLastSession) {
+        val history = library.filter { it.workout.kind == "session" && it.workout.finishedAt != null }
+            .sortedWith(compareByDescending<WorkoutDetails> { it.workout.finishedAt }
+                .thenByDescending { it.workout.startedAt }.thenByDescending { it.workout.id })
+            .flatMap { workout -> workout.exercises.filter { it.exercise.id == exercise.id }
+                .sortedWith(compareByDescending<ExerciseWithSets> { it.workoutExercise.position }.thenByDescending { it.workoutExercise.id })
+                .map { ExerciseSessionSnapshot(workout, it) } }
+        val snapshot = history.firstOrNull()
+        LastSessionDialog(LastSessionState(snapshot = snapshot, history = history), false, null,
+            onClose = { viewingLastSession = false }, onRetry = {}, onImport = { id ->
+                snapshot?.takeIf { it.entry.workoutExercise.id == id }?.let { source ->
+                    rows = source.entry.sets.sortedBy { it.position }.map {
+                        DirectPlanSetRow(prescription = TrainingPlanSet(it.reps, it.weightGrams, it.isWarmup, it.modifier))
+                    }
+                    viewingLastSession = false
+                }
+            })
     }
     if (setupEditor) EquipmentConfigurationEditor(if (override) config else exercise.equipmentDefault, "Plan exercise equipment", onDismiss = { setupEditor = false },
         action = SessionAction(error = setupError), allowNamedSetup = false, onSave = { selection, _, _, _ ->

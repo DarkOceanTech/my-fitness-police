@@ -154,7 +154,8 @@ class HistoryExerciseNoteUiTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
         try {
-            assertTrue("The regression test must run in portrait", bitmap.height > bitmap.width)
+            val wide = InstrumentationRegistry.getArguments().getString("expectedOrientation") == "wide"
+            assertTrue("Screenshot must match the requested orientation", if (wide) bitmap.width > bitmap.height else bitmap.height > bitmap.width)
             val folder = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "view-last-session-review").apply { mkdirs() }
             java.io.File(folder, "$name.png").outputStream().use {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

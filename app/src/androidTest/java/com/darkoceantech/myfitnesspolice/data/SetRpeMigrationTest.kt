@@ -42,7 +42,7 @@ class SetRpeMigrationTest {
             old.version = 9
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18).build()
+            .addMigrations(FitnessDatabase.MIGRATION_9_10, FitnessDatabase.MIGRATION_10_11, FitnessDatabase.MIGRATION_11_12, FitnessDatabase.MIGRATION_12_13, FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19).build()
         var db = open()
         try {
             val history = db.workoutDao().getDetails("history")!!

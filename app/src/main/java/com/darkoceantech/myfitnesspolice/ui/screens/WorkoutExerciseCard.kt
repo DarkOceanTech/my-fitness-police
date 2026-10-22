@@ -43,9 +43,6 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
     onDeleteSet: (String) -> Unit, onChange: (String, String, String) -> Unit,
     setAction: SessionAction, parentListState: LazyListState, parentViewport: Rect,
     onSetDragState: (Boolean) -> Unit, onReorderSets: (List<String>) -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
-    var confirmingRemoval by androidx.compose.runtime.saveable.rememberSaveable(entry.workoutExercise.id) { mutableStateOf(false) }
     var draggingSet by remember { mutableStateOf(false) }
     val controlsEnabled = enabled && !draggingSet
     val dragStart by rememberUpdatedState(onDragStart)
@@ -96,25 +93,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                         Text(entry.exercise.name, style = MaterialTheme.typography.titleMedium)
                         Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
-                    Box {
-                        IconButton(onClick = { menu = true }, enabled = controlsEnabled,
-                            modifier = Modifier.semantics { contentDescription = "Exercise options for " + entry.exercise.name }) {
-                            Text("⋮", fontSize = 24.sp)
-                        }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("View exercise info") },
-                                onClick = { menu = false; showInfo = true })
-                            DropdownMenuItem(text = { Text("Edit equipment setup") },
-                                onClick = { menu = false; onEquipment() })
-                            DropdownMenuItem(text = { Text("View last session") },
-                                enabled = enabled,
-                                modifier = Modifier.testTag("view-last-session-${entry.workoutExercise.id}"),
-                                onClick = { menu = false; onViewLastSession() })
-                            DropdownMenuItem(text = { Text("Remove", color = PoliceColors.Error) },
-                                enabled = enabled,
-                                onClick = { menu = false; confirmingRemoval = true })
-                        }
-                    }
+                    BuilderExerciseMenu(entry, controlsEnabled, onEquipment, onViewLastSession, onRemove)
                 }
                 EquipmentConfigurationSummary(entry.equipmentConfiguration())
                 Text(entry.workoutExercise.notes.ifBlank { "Add a note prior to workout" },
@@ -136,31 +115,12 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
             }
         }
     }
-    if (showInfo) ExerciseInfoDialog(entry.exercise, onDismiss = { showInfo = false })
-    if (confirmingRemoval) AlertDialog(
-        onDismissRequest = { confirmingRemoval = false },
-        containerColor = PoliceColors.Card,
-        title = { Text("Remove exercise?") },
-        text = {
-            val setCount = entry.sets.size
-            Text("Remove ${entry.exercise.name} and its $setCount planned ${if (setCount == 1) "set" else "sets"} from this workout?")
-        },
-        confirmButton = {
-            TextButton(onClick = { confirmingRemoval = false; onRemove() }, enabled = enabled,
-                modifier = Modifier.testTag("confirm-remove-exercise-${entry.workoutExercise.id}")) {
-                Text("Remove", color = if (enabled) PoliceColors.Error else PoliceColors.Muted)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { confirmingRemoval = false },
-                modifier = Modifier.testTag("cancel-remove-exercise-${entry.workoutExercise.id}")) { Text("Cancel") }
-        },
-    )
+
 }
 
 @Composable
 internal fun TablePicker(description: String, value: String, options: List<String>, enabled: Boolean,
-    modifier: Modifier = Modifier, label: (String) -> String = { it }, fullName: ((String) -> String)? = null,
+    modifier: Modifier = Modifier, label: (String) -> String = { it }, fullName: ((String) -> String)? = null, weightInput: Boolean = false,
     onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
@@ -170,7 +130,8 @@ internal fun TablePicker(description: String, value: String, options: List<Strin
             .clickable(enabled = enabled) { expanded = true }
             .semantics { contentDescription = description }.padding(horizontal = 2.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center) { Text(label(value), style = StatTypography.copy(fontSize = 12.sp)) }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+        if (weightInput && expanded) WeightKeypad(value, onDismiss = { expanded = false }, onSave = { onSelect(it); expanded = false })
+        DropdownMenu(expanded && !weightInput, onDismissRequest = { expanded = false }) {
             val scroll = rememberLazyListState(initialFirstVisibleItemIndex = (options.indexOf(value) - 2).coerceAtLeast(0))
             LazyColumn(Modifier.width(220.dp).height(minOf(240, options.size * 48).dp).testTag("$description options"), state = scroll) {
                 items(options, key = { it }) { item ->
@@ -187,3 +148,52 @@ internal fun TablePicker(description: String, value: String, options: List<Strin
     }
 }
 
+/** Shared body menu for workout and direct training-plan exercise cards. */
+@Composable
+internal fun BuilderExerciseMenu(entry: ExerciseWithSets, enabled: Boolean,
+    onEquipment: () -> Unit, onViewLastSession: () -> Unit, onRemove: () -> Unit,
+    removalContext: String = "workout", canRemove: Boolean = true) {
+    var menu by remember { mutableStateOf(false) }
+    var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
+    var confirmingRemoval by androidx.compose.runtime.saveable.rememberSaveable(entry.workoutExercise.id) { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menu = true }, enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = "Exercise options for " + entry.exercise.name }) {
+            Text("⋮", fontSize = 24.sp)
+        }
+        DropdownMenu(menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("View exercise info") },
+                onClick = { menu = false; showInfo = true })
+            DropdownMenuItem(text = { Text("Edit equipment setup") },
+                onClick = { menu = false; onEquipment() })
+            DropdownMenuItem(text = { Text("View last session") },
+                enabled = enabled,
+                modifier = Modifier.testTag("view-last-session-${entry.workoutExercise.id}"),
+                onClick = { menu = false; onViewLastSession() })
+            DropdownMenuItem(text = { Text("Remove", color = PoliceColors.Error) },
+                enabled = enabled,
+                onClick = { menu = false; confirmingRemoval = true })
+        }
+    }
+    if (showInfo) ExerciseInfoDialog(entry.exercise, onDismiss = { showInfo = false })
+    if (confirmingRemoval) AlertDialog(
+        onDismissRequest = { confirmingRemoval = false },
+        containerColor = PoliceColors.Card,
+        title = { Text("Remove exercise?") },
+        text = {
+            val setCount = entry.sets.size
+            if (!canRemove) Text("Add another workout or exercise to this plan before removing its last item.") else
+            Text("Remove ${entry.exercise.name} and its $setCount planned ${if (setCount == 1) "set" else "sets"} from this $removalContext?")
+        },
+        confirmButton = {
+            TextButton(onClick = { confirmingRemoval = false; onRemove() }, enabled = enabled && canRemove,
+                modifier = Modifier.testTag("confirm-remove-exercise-${entry.workoutExercise.id}")) {
+                Text("Remove", color = if (enabled) PoliceColors.Error else PoliceColors.Muted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { confirmingRemoval = false },
+                modifier = Modifier.testTag("cancel-remove-exercise-${entry.workoutExercise.id}")) { Text("Cancel") }
+        },
+    )
+}

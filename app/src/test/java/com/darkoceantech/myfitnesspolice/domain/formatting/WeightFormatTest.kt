@@ -10,7 +10,7 @@ class WeightFormatTest {
         assertEquals("0", formatWeight(BigDecimal.ZERO))
         assertEquals("65", formatWeight(BigDecimal("64.5")))
         assertEquals("64", formatWeight(BigDecimal("64.499")))
-        assertEquals("1,235", formatPoundsText("1234.5"))
+        assertEquals("1,234.5", formatPoundsText("1234.5"))
         assertEquals("1,000,000", formatWeight(BigDecimal("999999.5")))
         assertEquals("—", formatPoundsText("—"))
     }

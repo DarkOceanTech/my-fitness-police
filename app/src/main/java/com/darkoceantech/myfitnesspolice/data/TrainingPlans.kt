@@ -38,7 +38,7 @@ sealed interface TrainingPlanItem {
     data class WorkoutItem(val workoutId: String) : TrainingPlanItem {
         override val key: String get() = "workout:$workoutId"
     }
-    data class ExerciseItem(val exerciseId: String, val sets: List<TrainingPlanSet> = listOf(TrainingPlanSet()), val equipmentOverride: EquipmentConfiguration? = null) : TrainingPlanItem {
+    data class ExerciseItem(val exerciseId: String, val sets: List<TrainingPlanSet> = listOf(TrainingPlanSet()), val equipmentOverride: EquipmentConfiguration? = null, val notes: String = "") : TrainingPlanItem {
         override val key: String get() = "exercise:$exerciseId"
     }
 }
@@ -50,7 +50,8 @@ sealed interface TrainingPlanItem {
     ], indices = [Index("exerciseId"), Index(value = ["trainingPlanId", "position"], unique = true)])
 data class TrainingPlanExercise(val trainingPlanId: String, val exerciseId: String, val position: Int,
     @ColumnInfo(defaultValue = "'[]'") val sets: List<TrainingPlanSet> = listOf(TrainingPlanSet()),
-    @ColumnInfo(defaultValue = "NULL") val equipmentOverride: EquipmentConfiguration? = null)
+    @ColumnInfo(defaultValue = "NULL") val equipmentOverride: EquipmentConfiguration? = null,
+    @ColumnInfo(defaultValue = "''") val notes: String = "")
 
 data class TrainingPlanExerciseDetails(
     @Embedded val member: TrainingPlanExercise,
@@ -79,7 +80,7 @@ data class TrainingPlanDetails(
 ) {
     fun orderedItems(): List<TrainingPlanItem> =
         (members.map { it.position to TrainingPlanItem.WorkoutItem(it.workoutId) } +
-            exerciseMembers.map { it.member.position to TrainingPlanItem.ExerciseItem(it.member.exerciseId, it.member.sets, it.member.equipmentOverride) })
+            exerciseMembers.map { it.member.position to TrainingPlanItem.ExerciseItem(it.member.exerciseId, it.member.sets, it.member.equipmentOverride, it.member.notes) })
             .sortedBy { it.first }.map { it.second }
     fun exerciseFor(id: String): Exercise? = exerciseMembers.firstOrNull { it.member.exerciseId == id }?.exercise
     fun includedExercises(): List<Exercise> = exerciseMembers.sortedBy { it.member.position }.map { it.exercise }
@@ -156,7 +157,7 @@ class TrainingPlanRepository(private val database: FitnessDatabase) {
         dao.clearExerciseMembers(plan.id)
         orderedItems.forEachIndexed { position, item -> when (item) {
             is TrainingPlanItem.WorkoutItem -> dao.insertMembers(listOf(TrainingPlanWorkout(plan.id, item.workoutId, position)))
-            is TrainingPlanItem.ExerciseItem -> dao.insertExerciseMembers(listOf(TrainingPlanExercise(plan.id, item.exerciseId, position, item.sets, item.equipmentOverride)))
+            is TrainingPlanItem.ExerciseItem -> dao.insertExerciseMembers(listOf(TrainingPlanExercise(plan.id, item.exerciseId, position, item.sets, item.equipmentOverride, item.notes)))
         } }
         (previous?.workoutIds().orEmpty() + orderedItems.filterIsInstance<TrainingPlanItem.WorkoutItem>().map { it.workoutId })
             .distinct().forEach { syncLabels(it) }

@@ -16,7 +16,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.darkoceantech.myfitnesspolice.data.*
-import com.darkoceantech.myfitnesspolice.domain.formatting.formatSessionPounds
+import com.darkoceantech.myfitnesspolice.domain.formatting.formatPoundsText
 import com.darkoceantech.myfitnesspolice.ui.theme.*
 import java.text.DateFormat
 import java.util.Date
@@ -85,7 +85,7 @@ internal fun SwapExerciseDialog(entry: ExerciseWithSets, exercises: List<Exercis
                 SwapSetSource.LAST_SESSION -> preview.snapshot?.entry?.sets?.sortedBy { it.position }.orEmpty()
                 SwapSetSource.NEW -> emptyList()
             }
-            rows.forEachIndexed { index, set -> Text("${index + 1} · ${if (set.isWarmup) "Warm-up" else "Working set"} · ${formatSessionPounds(set.weightGrams)} Lbs · ${set.reps} reps",
+            rows.forEachIndexed { index, set -> Text("${index + 1} · ${if (set.isWarmup) "Warm-up" else "Working set"} · ${formatPoundsText(sessionPounds(set.weightGrams))} Lbs · ${set.reps} reps",
                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.LightBlue) }
             Text("Only this session changes. Results, RPE, set notes and timing are not imported. Exercise notes and equipment setup are cleared for the replacement.",
                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)

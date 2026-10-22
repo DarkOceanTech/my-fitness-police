@@ -47,7 +47,7 @@ class MixedTrainingPlanMigrationTest {
             old.version = 13
         }
         fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, filename)
-            .addMigrations(FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18).build()
+            .addMigrations(FitnessDatabase.MIGRATION_13_14, FitnessDatabase.MIGRATION_14_15, FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19).build()
         var db = open()
         try {
             assertEquals(17, db.openHelper.writableDatabase.version)

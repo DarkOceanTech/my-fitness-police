@@ -245,6 +245,12 @@ class SetReorderUiTest {
 
     private fun pick(description: String, value: String) {
         compose.onNodeWithContentDescription(description).performScrollTo().performClick()
+        if (description.startsWith("Weight")) {
+            value.forEach { compose.onNodeWithTag("weight-key-$it").performScrollTo().performClick() }
+            compose.onNodeWithTag("weight-keypad-save").performScrollTo().performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("weight-keypad").fetchSemanticsNodes().isEmpty() }
+            return
+        }
         compose.onNodeWithTag("$description options").performScrollToNode(hasText(value))
         compose.onNode(hasText(value) and hasClickAction() and hasAnyAncestor(hasTestTag("$description options"))).performClick()
     }

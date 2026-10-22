@@ -213,7 +213,7 @@ internal fun LastSessionUnrecordedSet(set: WorkoutSet, enabled: Boolean, onInfo:
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Set ${set.position + 1} · ${if (set.isWarmup) "Warm-up" else "Working set"}", style = MaterialTheme.typography.labelLarge)
-                Text("${formatSessionPounds(set.weightGrams)} Lbs · ${set.reps} planned reps · ${modifierName(set)}",
+                Text("${formatPoundsText(sessionPounds(set.weightGrams))} Lbs · ${set.reps} planned reps · ${modifierName(set)}",
                     style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
             }
             Surface(shape = CircleShape, color = Color.Transparent, border = BorderStroke(1.dp, PoliceColors.Muted)) {
@@ -239,7 +239,7 @@ internal fun LastSessionSetDetails(snapshot: ExerciseSessionSnapshot, set: Worko
                     SirenRule(Modifier.fillMaxWidth())
                     if (set.completedAt == null) Text("This set was not recorded.", color = PoliceColors.Muted)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        LastSessionValue("Weight (Lbs)", formatSessionPounds(set.weightGrams), "last-session-set-weight", Modifier.weight(1f))
+                        LastSessionValue("Weight (Lbs)", formatPoundsText(sessionPounds(set.weightGrams)), "last-session-set-weight", Modifier.weight(1f))
                         LastSessionValue("RPE", set.rpe?.toString() ?: "—", "last-session-set-rpe", Modifier.weight(1f))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

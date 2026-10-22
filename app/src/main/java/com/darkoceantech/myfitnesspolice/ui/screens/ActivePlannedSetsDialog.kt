@@ -54,18 +54,14 @@ internal fun ActivePlannedSetsDialog(entry: ExerciseWithSets, action: SessionAct
                 val completed = entry.sets.singleOrNull { it.id == row.id }?.completedAt != null
                 val enabled = !action.saving && !completed
                 val pounds = sessionPounds(row.weightGrams)
-                val weights = remember(pounds) {
-                    ((0..600).map { BigDecimal.valueOf(it * 25L, 1).stripTrailingZeros().toPlainString() } + pounds)
-                        .distinct().sortedBy { it.toBigDecimal() }
-                }
                 Surface(Modifier.fillMaxWidth(), shape = PoliceCardShape, color = PoliceColors.Card,
                     border = BorderStroke(1.dp, PoliceColors.Border)) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Set ${original.position + 1}" + if (completed) " · Completed" else "",
                             style = MaterialTheme.typography.titleMedium, color = if (completed) PoliceColors.Muted else PoliceColors.Text)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            RecordedNumberField("Weight (Lbs)", pounds, weights, !completed,
-                                "planned-weight-${row.id}", Modifier.weight(1f), enabled, formatValue = ::formatPoundsText) {
+                            RecordedNumberField("Weight (Lbs)", pounds, emptyList(), !completed,
+                                "planned-weight-${row.id}", Modifier.weight(1f), enabled, formatValue = ::formatPoundsText, weightInput = true) {
                                 if (it != pounds) change(row.copy(weightGrams = it.toBigDecimal().multiply(BigDecimal("453.59237"))
                                     .setScale(0, RoundingMode.HALF_UP).longValueExact()))
                             }

@@ -131,7 +131,7 @@ fun WorkoutFlowScreen(model: SessionViewModel, history: Boolean, modifier: Modif
                 items(entry.sets.filter { !history || it.completedAt != null }.sortedBy { it.position }, key = { it.id }) { set ->
                     Card(Modifier.fillMaxWidth(), shape = PoliceCardShape, border = BorderStroke(1.dp, PoliceColors.Border)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text("${set.actualReps ?: set.reps} reps × ${formatSessionPounds(set.weightGrams)} lbs", style = StatTypography.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize))
+                            Text("${set.actualReps ?: set.reps} reps × ${formatPoundsText(sessionPounds(set.weightGrams))} lbs", style = StatTypography.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize))
                             if (details.sessionState != null && set.actualReps != null) Text(
                                 "Planned: ${set.reps} reps · Work ${sessionTime(set.activeMillis)} · Rest ${sessionTime(set.restMillis)}",
                                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
@@ -213,18 +213,14 @@ private fun SetDialog(set: WorkoutSet?, action: SessionAction, onDismiss: () -> 
     var reps by rememberSaveable { mutableStateOf((set?.actualReps ?: set?.reps)?.toString() ?: "10") }
     var weight by rememberSaveable { mutableStateOf(set?.let { pounds(it.weightGrams) } ?: "0") }
     val repOptions = remember(reps) { ((1..100).map { it.toString() } + reps).distinct().sortedBy { it.toInt() } }
-    val weightOptions = remember(weight) {
-        ((0..600).map { BigDecimal.valueOf(it * 25L, 1).stripTrailingZeros().toPlainString() } + weight)
-            .distinct().sortedBy { it.toBigDecimal() }
-    }
     AlertDialog(
         onDismissRequest = { if (!action.saving) onDismiss() },
         title = { Text(if (set == null) "Record set" else "Edit set") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ScrollPicker("Reps", reps, repOptions, !action.saving) { reps = it }
-                ScrollPicker("Weight (lbs)", weight, weightOptions, !action.saving, ::formatPoundsText) { weight = it }
-                Text("Drag the dropdown list to choose a value. Use 0 lbs for bodyweight.")
+                ScrollPicker("Weight (lbs)", weight, emptyList(), !action.saving, ::formatPoundsText, weightInput = true) { weight = it }
+                Text("Choose reps from the list and enter weight using the keypad. Use 0 lbs for bodyweight.")
                 action.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -241,7 +237,7 @@ private fun SetDialog(set: WorkoutSet?, action: SessionAction, onDismiss: () -> 
 }
 
 @Composable
-private fun ScrollPicker(label: String, value: String, options: List<String>, enabled: Boolean, formatValue: (String) -> String = { it }, onSelect: (String) -> Unit) {
+private fun ScrollPicker(label: String, value: String, options: List<String>, enabled: Boolean, formatValue: (String) -> String = { it }, weightInput: Boolean = false, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium)
@@ -249,9 +245,10 @@ private fun ScrollPicker(label: String, value: String, options: List<String>, en
             OutlinedButton(onClick = { expanded = true }, enabled = enabled,
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }) {
                 Text(formatValue(value), Modifier.weight(1f))
-                Text("⌄")
+                if (!weightInput) Text("⌄")
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (weightInput && expanded) WeightKeypad(value, onDismiss = { expanded = false }, onSave = { onSelect(it); expanded = false })
+            DropdownMenu(expanded = expanded && !weightInput, onDismissRequest = { expanded = false }) {
                 val scroll = androidx.compose.foundation.lazy.rememberLazyListState(
                     initialFirstVisibleItemIndex = (options.indexOf(value) - 2).coerceAtLeast(0))
                 LazyColumn(Modifier.width(240.dp).height(240.dp).testTag("$label options"), state = scroll) {

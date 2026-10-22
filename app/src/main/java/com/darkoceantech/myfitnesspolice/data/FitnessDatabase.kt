@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [TimeCorrection::class, TimeReview::class, Exercise::class, Workout::class, WorkoutExercise::class, WorkoutSet::class, WorkoutSessionState::class,
         TrainingPlan::class, TrainingPlanWorkout::class, TrainingPlanExercise::class, TrainingSchedule::class,
         Gym::class, Equipment::class, NamedEquipmentSetup::class, StretchCatalogRow::class, StretchRoutineRow::class, StretchSessionRow::class, StretchPreferences::class],
-    version = 18,
+    version = 19,
     exportSchema = true,
 )
 @androidx.room.TypeConverters(EquipmentPositionConverters::class, TrainingPlanSetConverters::class, EquipmentConfigurationConverters::class)
@@ -27,6 +27,11 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingScheduleDao(): TrainingScheduleDao
 
     companion object {
+        val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE training_plan_exercises ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+            }
+        }
         val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS time_corrections (
@@ -260,7 +265,7 @@ abstract class FitnessDatabase : RoomDatabase() {
         fun builder(context: Context): Builder<FitnessDatabase> =
             Room.databaseBuilder(context.applicationContext, FitnessDatabase::class.java, "fitness.db")
                 .addCallback(SeedExercises)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
                 // Register explicit migrations here when version increases.
                 // Deliberately no destructive migration fallback.
     }

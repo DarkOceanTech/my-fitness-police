@@ -355,17 +355,9 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                 onSave = { model.saveEquipmentPositions(workout.workout.id, entry.workoutExercise.id, it) })
         }
     }
-    if (noteEntry != null && workout != null) AlertDialog(
-        onDismissRequest = { if (!action.saving) noteEntry = null }, title = { Text("Edit note") },
-        text = { Column {
-            OutlinedTextField(note, { note = it }, label = { Text("Exercise note") },
-                enabled = !action.saving, modifier = Modifier.heightIn(max = 240.dp))
-            action.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        } },
-        confirmButton = { TextButton(onClick = { model.note(workout.workout.id, noteEntry!!, note) },
-            enabled = !action.saving) { Text("Save note") } },
-        dismissButton = { TextButton(onClick = { noteEntry = null }, enabled = !action.saving) { Text("Cancel") } },
-    )
+    if (noteEntry != null && workout != null) FullScreenNoteEditor("Edit note", note, { note = it },
+        onDismiss = { noteEntry = null }, onSave = { model.note(workout.workout.id, noteEntry!!, note) },
+        action = action, tag = "workout-exercise-note-editor")
     if (finishing && !leaving && workout != null) AlertDialog(
         onDismissRequest = { if (!action.saving) finishing = false }, title = { Text("Save workout?") },
         text = { Text(action.error ?: if (planId == null) "Save this workout to your Workouts list?" else "Save changes to this workout?") },

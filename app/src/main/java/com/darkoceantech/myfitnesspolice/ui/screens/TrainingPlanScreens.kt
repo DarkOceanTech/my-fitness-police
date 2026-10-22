@@ -171,11 +171,13 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
     if (editing != null) TrainingExerciseSetsDialog(editing, name.ifBlank { "New training plan" },
         existing?.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
             ?: Exercise(editing.exerciseId, included.first { it.key == editing.key }.title, ""),
-        saving = false, error = null, onDismiss = { editingExerciseId = null }, onSave = { sets ->
+        library = library, onRemove = {
+            includedItems = includedItems.filterNot { it.key == editing.key }; editingExerciseId = null
+        }, saving = false, error = null, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets) else it }
             editingExerciseId = null
-        }, onSaveWithEquipment = { sets, config ->
-            includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config) else it }
+        }, onSaveDetails = { sets, config, note ->
+            includedItems = includedItems.map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config, notes = note) else it }
             editingExerciseId = null
         })
 }
@@ -364,11 +366,13 @@ internal fun TrainingPlanDetailScreen(details: TrainingPlanDetails, library: Lis
     if (editing != null) TrainingExerciseSetsDialog(editing, details.plan.name,
         details.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
             ?: Exercise(editing.exerciseId, entries.first { it.key == editing.key }.title, ""),
-        saving = action.saving, error = action.error, onDismiss = { editingExerciseId = null }, onSave = { sets ->
+        library = library, canRemove = details.orderedItems().size > 1, onRemove = {
+            requestedSave = true; onSaveItems(details.orderedItems().filterNot { it.key == editing.key })
+        }, saving = action.saving, error = action.error, onDismiss = { editingExerciseId = null }, onSave = { sets ->
             requestedSave = true
             onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets) else it })
-        }, onSaveWithEquipment = { sets, config ->
+        }, onSaveDetails = { sets, config, note ->
             requestedSave = true
-            onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config) else it })
+            onSaveItems(details.orderedItems().map { if (it.key == editing.key) editing.copy(sets = sets, equipmentOverride = config, notes = note) else it })
         })
 }

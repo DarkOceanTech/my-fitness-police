@@ -135,7 +135,7 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                             .padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             SessionReadOnlyCell("${set.position + 1} " + if (set.isWarmup) "Wu" else "Ws",
                                 "Set type ${set.id}", completed, Modifier.weight(1f))
-                            SessionReadOnlyCell(formatSessionPounds(set.weightGrams), "Session weight ${set.id}", completed, Modifier.weight(1f))
+                            SessionReadOnlyCell(formatPoundsText(sessionPounds(set.weightGrams)), "Session weight ${set.id}", completed, Modifier.weight(1f))
                             val repColor = if (completed && set.actualReps != null && set.actualReps != set.reps) repComparisonColor(set.reps, set.actualReps) else null
                             SessionReadOnlyCell(set.reps.toString(), "Session reps ${set.id}", completed, Modifier.weight(1f), repColor)
                             SessionReadOnlyCell(set.actualReps?.toString() ?: if (completed) set.reps.toString() else "—",
