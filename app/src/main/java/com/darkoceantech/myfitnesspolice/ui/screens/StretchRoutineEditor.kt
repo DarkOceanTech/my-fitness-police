@@ -83,9 +83,9 @@ internal fun StretchRoutineEditor(original: StretchRoutine?, catalog: List<Stret
             state = listState, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { StretchPanel {
                 Text("ROUTINE DETAILS", style = MaterialTheme.typography.labelLarge, color = PoliceColors.LightBlue)
-                OutlinedTextField(draft.name, { update(draft.copy(name = it)) }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth().testTag("routine-name"))
+                OutlinedTextField(draft.name, { update(draft.copy(name = it)) }, label = { RequiredFieldLabel("Name") }, modifier = Modifier.fillMaxWidth().testTag("routine-name"))
                 StretchChoice("Purpose", draft.purpose, stretchPurposes) { update(draft.copy(purpose = it)) }
-                OutlinedTextField(draft.description, { update(draft.copy(description = it)) }, label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(draft.description, { update(draft.copy(description = it)) }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
                 Text("Default times · seconds", color = PoliceColors.Muted)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("Work", "Rest", "Switch sides").forEach {

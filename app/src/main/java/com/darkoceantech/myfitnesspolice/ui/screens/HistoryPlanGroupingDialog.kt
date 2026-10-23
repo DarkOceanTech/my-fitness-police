@@ -95,7 +95,7 @@ internal fun HistoryPlanGroupingDialog(model: SessionViewModel, onDismiss: () ->
                         }
                         if (newPlan) {
                             OutlinedTextField(planName, { planName = it; model.clearError() }, singleLine = true,
-                                label = { Text("Plan name") }, enabled = !action.saving,
+                                label = { RequiredFieldLabel("Plan name") }, enabled = !action.saving,
                                 modifier = Modifier.fillMaxWidth().testTag("history-group-plan-name"))
                             Text("Add future workout routines to your new plan later in Academy.",
                                 style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)

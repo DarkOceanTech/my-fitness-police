@@ -42,7 +42,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
     onNote: () -> Unit, onEquipment: () -> Unit, onRemove: () -> Unit,
     onDeleteSet: (String) -> Unit, onChange: (String, String, String) -> Unit,
     setAction: SessionAction, parentListState: LazyListState, parentViewport: Rect,
-    onSetDragState: (Boolean) -> Unit, onReorderSets: (List<String>) -> Unit) {
+    onSetDragState: (Boolean) -> Unit, onReorderSets: (List<String>) -> Unit, onEditExercise: ((Int) -> Unit)? = null) {
     var draggingSet by remember { mutableStateOf(false) }
     val controlsEnabled = enabled && !draggingSet
     val dragStart by rememberUpdatedState(onDragStart)
@@ -93,7 +93,7 @@ internal fun BuilderExerciseCard(entry: ExerciseWithSets, enabled: Boolean, modi
                         Text(entry.exercise.name, style = MaterialTheme.typography.titleMedium)
                         Text(entry.exercise.equipment, style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                     }
-                    BuilderExerciseMenu(entry, controlsEnabled, onEquipment, onViewLastSession, onRemove)
+                    BuilderExerciseMenu(entry, controlsEnabled, onEquipment, onViewLastSession, onRemove, onEditExercise = onEditExercise)
                 }
                 EquipmentConfigurationSummary(entry.equipmentConfiguration())
                 Text(entry.workoutExercise.notes.ifBlank { "Add a note prior to workout" },
@@ -152,7 +152,7 @@ internal fun TablePicker(description: String, value: String, options: List<Strin
 @Composable
 internal fun BuilderExerciseMenu(entry: ExerciseWithSets, enabled: Boolean,
     onEquipment: () -> Unit, onViewLastSession: () -> Unit, onRemove: () -> Unit,
-    removalContext: String = "workout", canRemove: Boolean = true) {
+    removalContext: String = "workout", canRemove: Boolean = true, onEditExercise: ((Int) -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
     var showInfo by androidx.compose.runtime.saveable.rememberSaveable(entry.exercise.id) { mutableStateOf(false) }
     var confirmingRemoval by androidx.compose.runtime.saveable.rememberSaveable(entry.workoutExercise.id) { mutableStateOf(false) }
@@ -163,9 +163,9 @@ internal fun BuilderExerciseMenu(entry: ExerciseWithSets, enabled: Boolean,
         }
         DropdownMenu(menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("View exercise info") },
-                onClick = { menu = false; showInfo = true })
+                onClick = { menu = false; if (onEditExercise != null) onEditExercise(0) else showInfo = true })
             DropdownMenuItem(text = { Text("Edit equipment setup") },
-                onClick = { menu = false; onEquipment() })
+                onClick = { menu = false; if (onEditExercise != null) onEditExercise(1) else onEquipment() })
             DropdownMenuItem(text = { Text("View last session") },
                 enabled = enabled,
                 modifier = Modifier.testTag("view-last-session-${entry.workoutExercise.id}"),

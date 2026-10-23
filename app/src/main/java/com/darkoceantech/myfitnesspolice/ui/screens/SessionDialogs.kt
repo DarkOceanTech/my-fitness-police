@@ -38,7 +38,7 @@ internal fun ActualRepsDialog(set: WorkoutSet, action: SessionAction, onSave: (S
             RecordedNumberField("Actual reps", actual, repOptions, true, "actual-reps-input", Modifier.fillMaxWidth(),
                 enabled = !action.saving) { actual = it }
             Text("Choose 0 if you could not complete a rep.", style = MaterialTheme.typography.bodySmall)
-            Text("RPE (optional)", style = MaterialTheme.typography.labelLarge, color = PoliceColors.Muted)
+            Text("RPE", style = MaterialTheme.typography.labelLarge, color = PoliceColors.Muted)
             TablePicker("Set RPE", rpe?.toString() ?: "Not set", listOf("Not set") + (1..10).map { it.toString() },
                 !action.saving, Modifier.fillMaxWidth().testTag("after-set-rpe")) { rpe = it.toIntOrNull() }
             OutlinedButton(onClick = { noteDraft = note; editingNote = true }, enabled = !action.saving,
@@ -62,7 +62,7 @@ internal fun PauseReasonDialog(reason: String, action: SessionAction, onDismiss:
     AlertDialog(onDismissRequest = { if (!action.saving) onDismiss() }, title = { Text("Workout paused") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("All timers are stopped. You can close the app and resume this workout later.")
-            OutlinedTextField(text, { text = it }, label = { Text("Pause reason (optional)") },
+            OutlinedTextField(text, { text = it }, label = { Text("Pause reason") },
                 enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("pause-reason-input"), maxLines = 4)
             action.error?.let { Text(it, color = PoliceColors.Error) }
         } },

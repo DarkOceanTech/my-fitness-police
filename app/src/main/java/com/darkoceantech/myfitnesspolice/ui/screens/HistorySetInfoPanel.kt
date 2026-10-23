@@ -206,7 +206,7 @@ internal fun RecordedNumberField(label: String, value: String, options: List<Str
     onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
+        if (editable && label != "RPE") RequiredFieldLabel(label) else Text(label, style = MaterialTheme.typography.labelMedium, color = PoliceColors.Muted)
         Box {
             Surface(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag)
                 .then(if (editable && enabled) Modifier.clickable { expanded = true } else Modifier)

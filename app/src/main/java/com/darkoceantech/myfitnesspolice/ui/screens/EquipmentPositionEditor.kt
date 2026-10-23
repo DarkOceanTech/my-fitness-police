@@ -97,10 +97,10 @@ internal fun EquipmentPositionEditor(entry: ExerciseWithSets, action: SessionAct
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(item.name, { update(index, item.copy(name = it)) },
-                                label = { Text("Name") }, placeholder = { Text("Seat") }, maxLines = 2,
+                                label = { RequiredFieldLabel("Name", item.position.isNotBlank()) }, placeholder = { Text("Seat") }, maxLines = 2,
                                 enabled = !action.saving, modifier = Modifier.weight(1f).focusRequester(nameFocus).testTag("position-name-$index"))
                             OutlinedTextField(item.position, { update(index, item.copy(position = it)) },
-                                label = { Text("Position") }, placeholder = { Text("4") }, maxLines = 2,
+                                label = { RequiredFieldLabel("Position", item.name.isNotBlank()) }, placeholder = { Text("4") }, maxLines = 2,
                                 enabled = !action.saving, modifier = Modifier.weight(1f).testTag("position-value-$index"))
                         }
                     }

@@ -34,7 +34,7 @@ class MobilityPersistenceTest {
             old.execSQL("INSERT INTO workout_sets (id,workoutExerciseId,position,reps,actualReps,weightGrams,completedAt,isWarmup,modifier,activeMillis,restMillis,notes) VALUES ('set','entry',0,10,9,10000,250,0,'none',20,30,'Original set note')")
             old.version = 15
         }
-        val db = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19).build()
+        val db = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_15_16, FitnessDatabase.MIGRATION_16_17, FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19, FitnessDatabase.MIGRATION_19_20).build()
         try {
             assertEquals(17, db.openHelper.writableDatabase.version)
             assertEquals(7, db.stretchDao().catalog().first().size)

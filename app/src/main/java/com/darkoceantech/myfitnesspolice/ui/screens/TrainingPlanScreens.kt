@@ -102,7 +102,7 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
     }
     val fields: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
-            OutlinedTextField(name, { name = it }, label = { Text("Plan name") }, placeholder = { Text("Back + Arms + Abs") },
+            OutlinedTextField(name, { name = it }, label = { RequiredFieldLabel("Plan name") }, placeholder = { Text("Back + Arms + Abs") },
                 singleLine = true, enabled = !action.saving, modifier = Modifier.weight(1f).testTag("training-plan-name"))
         }
         Text("Tap to select. Hold to move workouts or exercises between lists.", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
@@ -169,7 +169,7 @@ internal fun TrainingPlanEditorScreen(existing: TrainingPlanDetails?, library: L
     }
     val editing = includedItems.filterIsInstance<TrainingPlanItem.ExerciseItem>().find { it.exerciseId == editingExerciseId }
     if (editing != null) TrainingExerciseSetsDialog(editing, name.ifBlank { "New training plan" },
-        existing?.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
+        exercises.firstOrNull { it.id == editing.exerciseId } ?: existing?.exerciseFor(editing.exerciseId)
             ?: Exercise(editing.exerciseId, included.first { it.key == editing.key }.title, ""),
         library = library, onRemove = {
             includedItems = includedItems.filterNot { it.key == editing.key }; editingExerciseId = null
@@ -364,7 +364,7 @@ internal fun TrainingPlanDetailScreen(details: TrainingPlanDetails, library: Lis
         dismissButton = { TextButton(onClick = { deleting = false }, enabled = !action.saving) { Text("Cancel") } })
     val editing = details.orderedItems().filterIsInstance<TrainingPlanItem.ExerciseItem>().find { it.exerciseId == editingExerciseId }
     if (editing != null) TrainingExerciseSetsDialog(editing, details.plan.name,
-        details.exerciseFor(editing.exerciseId) ?: exercises.firstOrNull { it.id == editing.exerciseId }
+        exercises.firstOrNull { it.id == editing.exerciseId } ?: details.exerciseFor(editing.exerciseId)
             ?: Exercise(editing.exerciseId, entries.first { it.key == editing.key }.title, ""),
         library = library, canRemove = details.orderedItems().size > 1, onRemove = {
             requestedSave = true; onSaveItems(details.orderedItems().filterNot { it.key == editing.key })

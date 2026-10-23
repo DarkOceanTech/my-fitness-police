@@ -42,7 +42,7 @@ internal fun HistoryWorkoutNameDialog(workouts: List<WorkoutDetails>, initialId:
                     }
                 }
             }
-            OutlinedTextField(name, { name = it; onEdit() }, label = { Text("Workout name") }, singleLine = true,
+            OutlinedTextField(name, { name = it; onEdit() }, label = { RequiredFieldLabel("Workout name") }, singleLine = true,
                 enabled = !action.saving && selected != null, modifier = Modifier.fillMaxWidth().testTag("history-workout-name"))
             action.error?.let { Text(it, color = PoliceColors.Error) }
         } },

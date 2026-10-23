@@ -100,6 +100,9 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
         }
     }
     var picker by rememberSaveable { mutableStateOf(false) }
+    val equipmentModel = LocalEquipmentLibraryModel.current
+    var editingExerciseId by rememberSaveable(planId) { mutableStateOf<String?>(null) }
+    var exerciseEditorTab by rememberSaveable(planId) { mutableIntStateOf(0) }
     var equipmentEntry by rememberSaveable { mutableStateOf<String?>(null) }
     var noteEntry by rememberSaveable { mutableStateOf<String?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
@@ -286,6 +289,10 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
                             lastSessionEntry = id
                         },
                         onEquipment = { model.clearError(); equipmentEntry = id },
+                        onEditExercise = { tab ->
+                            exercisesModel.resetForm(); equipmentModel?.reset()
+                            exerciseEditorTab = tab; editingExerciseId = entry.exercise.id
+                        },
                         onRemove = { model.removeExercise(workout.workout.id, id) },
                         onDeleteSet = { model.deleteSet(workout.workout.id, id, it) },
                         onNote = { model.clearError(); note = entry.workoutExercise.notes; noteEntry = id },
@@ -318,6 +325,20 @@ fun WorkoutBuilderScreen(model: SessionViewModel, exercisesModel: ExercisesViewM
             }
         }
     }
+    // Keep the workout editor mounted. Shared exercise saves never write its sets or overrides.
+    val editingExercise = state.exercises.firstOrNull { it.id == editingExerciseId }
+    LaunchedEffect(exerciseForm.saved) {
+        if (exerciseForm.saved && editingExerciseId != null) {
+            editingExerciseId = null
+            exercisesModel.resetForm()
+        }
+    }
+    if (editingExercise != null) ExerciseFormDialog(exerciseForm,
+        onDismiss = { editingExerciseId = null; exercisesModel.resetForm() },
+        onEdit = exercisesModel::resetForm, exercise = editingExercise, initialTab = exerciseEditorTab,
+        onSave = { name, equipment, description, primary, secondary ->
+            exercisesModel.updateExercise(editingExercise.id, name, equipment, description, primary, secondary)
+        })
     if (lastSessionEntry != null && workout != null) LastSessionDialog(lastSession, action.saving, importError,
         onClose = ::closeLastSession,
         onRetry = { model.loadLastSession(workout.workout.id, lastSessionEntry!!) },

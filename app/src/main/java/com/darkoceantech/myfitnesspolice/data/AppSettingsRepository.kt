@@ -12,7 +12,14 @@ class AppSettingsRepository(context: Context, preferenceName: String = "app_sett
     private val preferences = context.applicationContext.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
     private val mutableWeekStartsOn = MutableStateFlow(readWeekStartsOn())
     val weekStartsOn: StateFlow<DayOfWeek> = mutableWeekStartsOn.asStateFlow()
+    private val mutableDefaultGymId = MutableStateFlow(preferences.getString(DEFAULT_GYM_ID, null))
+    val defaultGymId: StateFlow<String?> = mutableDefaultGymId.asStateFlow()
+    fun setDefaultGym(id: String?) {
+        preferences.edit().putString(DEFAULT_GYM_ID, id).apply()
+        mutableDefaultGymId.value = id
+    }
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == DEFAULT_GYM_ID) mutableDefaultGymId.value = preferences.getString(DEFAULT_GYM_ID, null)
         if (key == WEEK_STARTS_ON) mutableWeekStartsOn.value = readWeekStartsOn()
     }
 
@@ -29,5 +36,7 @@ class AppSettingsRepository(context: Context, preferenceName: String = "app_sett
 
     override fun close() { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
 
-    companion object { private const val WEEK_STARTS_ON = "week_starts_on" }
+    companion object {
+        private const val DEFAULT_GYM_ID = "default_gym_id"
+        private const val WEEK_STARTS_ON = "week_starts_on" }
 }

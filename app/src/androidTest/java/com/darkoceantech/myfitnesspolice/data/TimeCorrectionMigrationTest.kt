@@ -30,7 +30,7 @@ class TimeCorrectionMigrationTest {
             old.execSQL("INSERT INTO workout_sets (id,workoutExerciseId,position,reps,weightGrams,isWarmup,notes,completedAt,actualReps,rpe,activeMillis,restMillis) VALUES ('s','entry',0,10,10000,0,'#TIME',5000,8,7,2000,60000)")
             old.version = 17
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_17_18, FitnessDatabase.MIGRATION_18_19, FitnessDatabase.MIGRATION_19_20).build()
         var db = open()
         try {
             assertEquals(2000L, db.workoutDao().getDetails("w")!!.orderedSets().single().activeMillis)

@@ -68,6 +68,7 @@ class ExerciseEditingUiTest {
             compose.onNodeWithTag("exercise-name").performScrollTo().performTextReplacement("Discard this change")
             screenshot("edit-cancel-keyboard")
             compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
+            compose.onNodeWithTag("discard-exercise-changes").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("exercise-editor-screen").fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf(original), records())
 
@@ -75,6 +76,8 @@ class ExerciseEditingUiTest {
             assertField("exercise-name", original.name)
             compose.onNodeWithTag("exercise-name").performScrollTo().performTextReplacement("")
             compose.onNodeWithTag("save-exercise").assertIsDisplayed().performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Enter an exercise name.").fetchSemanticsNodes().isNotEmpty() }
+            screenshot("validation-error")
             compose.onNodeWithText("Enter an exercise name.").assertIsDisplayed()
             assertEquals(listOf(original), records())
             listOf(

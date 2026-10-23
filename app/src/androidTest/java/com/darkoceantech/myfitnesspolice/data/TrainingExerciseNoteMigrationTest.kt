@@ -33,7 +33,7 @@ class TrainingExerciseNoteMigrationTest {
                 arrayOf(TrainingPlanSetConverters().encode(listOf(TrainingPlanSet()))))
             old.version = 18
         }
-        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_18_19).build()
+        fun open() = Room.databaseBuilder(context, FitnessDatabase::class.java, name).addMigrations(FitnessDatabase.MIGRATION_18_19, FitnessDatabase.MIGRATION_19_20).build()
         var db = open()
         try {
             val existing = db.trainingPlanDao().get("plan")!!.orderedItems().single() as TrainingPlanItem.ExerciseItem

@@ -149,9 +149,9 @@ internal fun TimeCorrectionDialog(model: SessionViewModel, workoutId: String, se
                                 Text("Estimate: ${sessionTime(estimate.millis)} · ${estimate.count} comparable sets\nTypical observed range: ${sessionTime(estimate.low)}–${sessionTime(estimate.high)}")
                                 TextButton(onClick = { seconds = BigDecimal.valueOf(estimate.millis, 3).stripTrailingZeros().toPlainString(); source = "Estimated"; provenance = estimate.provenance }) { Text("Use estimate") }
                             } else Text("Not enough comparable sets for an estimate. Enter a manual duration.")
-                            OutlinedTextField(seconds, { seconds = it; source = "Manual"; provenance = "" }, label = { Text("Work duration (seconds)") },
+                            OutlinedTextField(seconds, { seconds = it; source = "Manual"; provenance = "" }, label = { RequiredFieldLabel("Work duration (seconds)") },
                                 modifier = Modifier.fillMaxWidth().testTag("corrected-work-seconds"), singleLine = true)
-                            OutlinedTextField(reason, { reason = it }, label = { Text("Reason (optional)") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(reason, { reason = it }, label = { Text("Reason") }, modifier = Modifier.fillMaxWidth())
                             PoliceButton(onClick = {
                                 error = null
                                 try {

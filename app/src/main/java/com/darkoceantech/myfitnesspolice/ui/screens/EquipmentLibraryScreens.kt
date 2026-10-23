@@ -34,7 +34,7 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
 }
 
 @Composable internal fun EquipmentConfigurationFields(configuration: EquipmentConfiguration,
-    enabled: Boolean, allowManage: Boolean = true, onChange: (EquipmentConfiguration) -> Unit) {
+    enabled: Boolean, allowManage: Boolean = true, selectionLabel: String = "Equipment (select one or more)", onChange: (EquipmentConfiguration) -> Unit) {
     val model = LocalEquipmentLibraryModel.current ?: return
     val library by model.library.collectAsStateWithLifecycle()
     val gymId = configuration.gymId.orEmpty()
@@ -43,6 +43,15 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
         (it.gymId == null || library.gyms.any { g -> g.id == it.gymId && !g.isArchived }) }
     val selectedIds = configuration.equipment.map { it.id }.toSet()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (configuration.equipmentSetups.isNotEmpty()) LibraryDropdown("Use equipment option",
+            configuration.equipment.joinToString(" + ") { it.name }.ifBlank { "Choose an alternative" },
+            configuration.equipmentSetups.map { option ->
+                option.equipment.single().id to (option.equipment.single().name + " · " + option.setupName.ifBlank { "Custom setup" })
+            }, enabled, "use-equipment-option") { id ->
+            val selected = configuration.equipmentSetups.single { it.equipment.single().id == id }
+            onChange(selected.copy(compatibleEquipment = configuration.compatibleEquipment,
+                equipmentSetups = configuration.equipmentSetups))
+        }
         LibraryDropdown("Gym", library.gyms.find { it.id == gymId }?.name ?: "All gyms / portable equipment",
             listOf("" to "All gyms / portable equipment") + library.gyms.filterNot { it.isArchived }.map { it.id to it.name },
             enabled, "equipment-gym") { id ->
@@ -52,7 +61,7 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
                 equipment = equipment, positions = if (changed) emptyList() else configuration.positions,
                 setupId = if (changed) null else configuration.setupId, setupName = if (changed) "" else configuration.setupName))
         }
-        LibraryDropdown("Equipment (select one or more)", "Select equipment",
+        LibraryDropdown(selectionLabel, "Select equipment",
             available.map { it.id to ((if (it.id in selectedIds) "✓ " else "") + it.name + " · " + it.type) }, enabled, "equipment-selector") { id ->
             val e = available.single { it.id == id }
             val next = if (id in selectedIds) configuration.equipment.filterNot { it.id == id }
@@ -99,9 +108,9 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(p.name, { value -> onChange(config.copy(positions = config.positions.mapIndexed { i, old -> if (i == index) old.copy(name = value) else old })) },
-                            label = { Text("Name") }, enabled = enabled, modifier = Modifier.weight(1f).testTag("position-name-$index"))
+                            label = { RequiredFieldLabel("Name", p.position.isNotBlank()) }, enabled = enabled, modifier = Modifier.weight(1f).testTag("position-name-$index"))
                         OutlinedTextField(p.position, { value -> onChange(config.copy(positions = config.positions.mapIndexed { i, old -> if (i == index) old.copy(position = value) else old })) },
-                            label = { Text("Position") }, enabled = enabled, modifier = Modifier.weight(1f).testTag("position-value-$index"))
+                            label = { RequiredFieldLabel("Position", p.name.isNotBlank()) }, enabled = enabled, modifier = Modifier.weight(1f).testTag("position-value-$index"))
                     }
                 }
             }
@@ -143,8 +152,8 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
                     enabled = !action.saving, modifier = Modifier.testTag("clear-equipment-setup")) { Text("Use no equipment / setup") }
                 EquipmentPositionFields(config, !action.saving) { config = it }
                 if (!session && allowNamedSetup) {
-                    OutlinedTextField(named, { named = it }, label = { Text("Save a new reusable setup (optional name)") }, modifier = Modifier.fillMaxWidth().testTag("new-setup-name"), enabled = !action.saving)
-                    if (named.isNotBlank() && config.equipment.isEmpty()) OutlinedTextField(type, { type = it }, label = { Text("Compatible equipment type") }, modifier = Modifier.fillMaxWidth(), enabled = !action.saving)
+                    OutlinedTextField(named, { named = it }, label = { Text("Save a new reusable setup") }, modifier = Modifier.fillMaxWidth().testTag("new-setup-name"), enabled = !action.saving)
+                    if (named.isNotBlank() && config.equipment.isEmpty()) OutlinedTextField(type, { type = it }, label = { RequiredFieldLabel("Compatible equipment type") }, modifier = Modifier.fillMaxWidth(), enabled = !action.saving)
                 }
             }
             action.error?.let { Text(it, color = PoliceColors.Error) }
@@ -152,32 +161,56 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
     }
 }
 
-@Composable internal fun EquipmentLibraryDialog(model: EquipmentLibraryViewModel, onDismiss: () -> Unit) {
+@Composable internal fun EquipmentLibraryDialog(model: EquipmentLibraryViewModel, initialCategory: Int = 0, fixedCategory: Boolean = false, directRecord: Boolean = false, recordId: String? = null, onDismiss: () -> Unit) {
     val library by model.library.collectAsStateWithLifecycle()
     val action by model.action.collectAsStateWithLifecycle()
-    var category by rememberSaveable { mutableIntStateOf(0) }
-    var id by rememberSaveable { mutableStateOf<String?>(null) }
+    val defaultGymId by model.defaultGymId.collectAsStateWithLifecycle()
+    var category by rememberSaveable { mutableIntStateOf(initialCategory) }
+    var id by rememberSaveable { mutableStateOf(recordId) }
     var name by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf("") }
+    var address by rememberSaveable { mutableStateOf(List(6) { "" }) }
+    var loaded by rememberSaveable { mutableStateOf(false) }
     var make by rememberSaveable { mutableStateOf("") }
     var gym by rememberSaveable { mutableStateOf("") }
     var config by rememberSaveable(stateSaver = EquipmentConfigurationSaver) { mutableStateOf(EquipmentConfiguration()) }
+    fun loadRecord(key: String?) {
+        id = key; name = ""; type = ""; make = ""; gym = ""; config = EquipmentConfiguration(); address = List(6) { "" }
+        when (category) {
+            0 -> library.gyms.find { it.id == key }?.let {
+                name = it.name
+                address = listOf(it.addressLine1, it.addressLine2, it.city, it.region, it.postalCode, it.country)
+            }
+            1 -> library.equipment.find { it.id == key }?.let { name = it.name; type = it.type; make = it.makeModel; gym = it.gymId.orEmpty() }
+            else -> library.setups.find { it.id == key }?.let { name = it.name; type = it.compatibleType; config = it.configuration }
+        }
+    }
+    LaunchedEffect(library, recordId) {
+        if (!loaded && (recordId == null || when (category) {
+            0 -> library.gyms.any { it.id == recordId }
+            1 -> library.equipment.any { it.id == recordId }
+            else -> library.setups.any { it.id == recordId }
+        })) { loadRecord(recordId); loaded = true }
+    }
     val revision = remember { action.revision }
     LaunchedEffect(action.revision) { if (action.revision > revision && action.completedAction == "library") {
-        id = null; name = ""; type = ""; make = ""; gym = ""; config = EquipmentConfiguration(); model.reset()
+        if (directRecord) onDismiss() else loadRecord(null); model.reset()
     } }
-    WorkoutEditorDialog("Gym & equipment library", "equipment-library", !action.saving, onDismiss, fullScreen = true, footer = {
+    val title = if (fixedCategory || category == 1) (if (id == null) "Create " else "Edit ") +
+        when (category) { 0 -> "gym"; 1 -> "equipment"; else -> "setup" } else "Gym & equipment library"
+    WorkoutEditorDialog(title, "equipment-library", !action.saving, onDismiss, fullScreen = true, footer = {
         OutlinedButton(onClick = onDismiss, enabled = !action.saving) { Text("Close") }
         Spacer(Modifier.weight(1f))
         PoliceButton(onClick = { when(category) {
-            0 -> model.gym(id, name)
+            0 -> model.gym(id, name, address)
             1 -> model.equipment(id, type, name, make, gym.ifBlank { null })
             else -> model.setup(id, name, type, config)
         } }, enabled = !action.saving, modifier = Modifier.testTag("save-library-record")) { Text("Save") }
     }) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row { listOf("Gyms", "Equipment", "Setups").forEachIndexed { i, title ->
-                FilterChip(category == i, onClick = { category = i; id = null; name = ""; type = ""; make = ""; gym = ""; config = EquipmentConfiguration(); model.reset() },
+            Text("Shared library record. Save here updates the library immediately; saving or cancelling the exercise only affects its selections.", color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+            if (!fixedCategory) Row { listOf("Gyms", "Equipment", "Setups").forEachIndexed { i, title ->
+                FilterChip(category == i, onClick = { category = i; if (directRecord) onDismiss() else loadRecord(null); model.reset() },
                     label = { Text(title) }, enabled = !action.saving, modifier = Modifier.weight(1f).testTag("library-category-$i"))
             } }
             val records = when(category) {
@@ -185,25 +218,38 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
                 1 -> library.equipment.filterNot { it.isArchived }.map { it.id to (it.name + " · " + it.type) }
                 else -> library.setups.filterNot { it.isArchived }.map { it.id to it.name }
             }
-            LibraryDropdown("Create or edit", records.find { it.first == id }?.second ?: "New record", listOf("" to "New record") + records,
-                !action.saving, "library-record") { key ->
-                id = key.ifBlank { null }; name = ""; type = ""; make = ""; gym = ""; config = EquipmentConfiguration()
-                when(category) {
-                    0 -> name = library.gyms.find { it.id == key }?.name.orEmpty()
-                    1 -> library.equipment.find { it.id == key }?.let { name = it.name; type = it.type; make = it.makeModel; gym = it.gymId.orEmpty() }
-                    else -> library.setups.find { it.id == key }?.let { name = it.name; type = it.compatibleType; config = it.configuration }
-                }; model.reset()
+            if (!directRecord && category != 1) LibraryDropdown("Create or edit",
+                records.find { it.first == id }?.second ?: "New record", listOf("" to "New record") + records,
+                !action.saving, "library-record") { key -> loadRecord(key.ifBlank { null }); model.reset() }
+            if (!directRecord && category == 1) {
+                TextButton(onClick = { loadRecord(null); model.reset() }) { Text("Create equipment") }
+                records.forEach { (key, label) ->
+                    TextButton(onClick = { loadRecord(key); model.reset() }) { Text("Edit " + label) }
+                }
             }
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("library-name"))
-            if (category > 0) OutlinedTextField(type, { type = it }, label = { Text(if (category == 1) "Equipment type" else "Compatible equipment type") },
+            if (category == 0 && id != null) {
+                if (defaultGymId == id) Text("Default gym", color = PoliceColors.LightBlue)
+                TextButton(onClick = { model.setDefaultGym(if (defaultGymId == id) null else id) },
+                    enabled = !action.saving) {
+                    Text(if (defaultGymId == id) "Clear default gym" else "Set as default gym")
+                }
+            }
+            RequiredFieldsHint()
+            OutlinedTextField(name, { name = it }, label = { RequiredFieldLabel("Name") }, enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("library-name"))
+            if (category == 0) address.forEachIndexed { index, value ->
+                OutlinedTextField(value, { updated -> address = address.toMutableList().apply { set(index, updated) } },
+                    label = { Text(listOf("Address line 1", "Address line 2", "City", "State/province/region", "Postal code", "Country")[index]) },
+                    enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("gym-address-$index"))
+            }
+            if (category > 0) OutlinedTextField(type, { type = it }, label = { RequiredFieldLabel(if (category == 1) "Equipment type" else "Compatible equipment type", category == 1 || config.equipment.isEmpty()) },
                 enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("library-type"))
             if (category == 1) {
-                OutlinedTextField(make, { make = it }, label = { Text("Make / model (optional)") }, enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("library-model"))
+                OutlinedTextField(make, { make = it }, label = { Text("Make / model") }, enabled = !action.saving, modifier = Modifier.fillMaxWidth().testTag("library-model"))
                 LibraryDropdown("Gym", library.gyms.find { it.id == gym }?.name ?: "Portable / no gym",
                     listOf("" to "Portable / no gym") + library.gyms.filterNot { it.isArchived }.map { it.id to it.name }, !action.saving, "library-gym") { gym = it }
             }
             if (category == 2) {
-                EquipmentConfigurationFields(config, !action.saving, allowManage = false) { config = it }
+                EquipmentConfigurationFields(config, !action.saving, allowManage = false, selectionLabel = "Equipment used by this setup") { config = it }
                 EquipmentPositionFields(config, !action.saving) { config = it }
             }
             if (id != null) TextButton(onClick = { model.archive(category, requireNotNull(id)) }, enabled = !action.saving) { Text("Archive", color = PoliceColors.Error) }
@@ -221,6 +267,14 @@ internal val EquipmentConfigurationSaver = androidx.compose.runtime.saveable.Sav
             color = PoliceColors.LightBlue, style = MaterialTheme.typography.bodySmall) }
         if (config.setupName.isNotBlank()) Text("Setup: " + config.setupName, color = PoliceColors.LightBlue, style = MaterialTheme.typography.labelMedium)
         if (config.equipment.isEmpty() && config.legacyDescription.isNotBlank()) Text(config.legacyDescription, color = PoliceColors.Muted, style = MaterialTheme.typography.bodySmall)
+        if (config.equipmentSetups.isNotEmpty()) {
+            Text("Equipment alternatives · individual setups", color = PoliceColors.Muted, style = MaterialTheme.typography.labelSmall)
+            config.equipmentSetups.forEach { option ->
+                Text(option.equipment.joinToString(" · ") { it.name } + " · " + option.setupName.ifBlank { "Custom setup" },
+                    color = PoliceColors.LightBlue, style = MaterialTheme.typography.bodySmall)
+                EquipmentPositionSummary(option.positions)
+            }
+        }
         EquipmentPositionSummary(config.positions)
     }
 }

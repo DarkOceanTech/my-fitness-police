@@ -190,7 +190,7 @@ internal fun StretchMovementForm(original: StretchMovement?, action: SessionActi
                 modifier = Modifier.weight(1f).testTag("save-stretch")) { Text("Save") }
         }) {
         LazyColumn(Modifier.weight(1f).testTag("stretch-form-fields"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { OutlinedTextField(movement.name, { update(movement.copy(name = it)) }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth().testTag("stretch-name")) }
+            item { OutlinedTextField(movement.name, { update(movement.copy(name = it)) }, label = { RequiredFieldLabel("Name") }, modifier = Modifier.fillMaxWidth().testTag("stretch-name")) }
             item { OutlinedTextField(movement.instructions, { update(movement.copy(instructions = it)) }, label = { Text("Instructions / description") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(movement.equipment, { update(movement.copy(equipment = it)) }, label = { Text("Equipment (No equipment is allowed)") }, modifier = Modifier.fillMaxWidth()) }
             item {

@@ -34,7 +34,7 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
     onChangeExercise: (() -> Unit)? = null, onViewLastSession: (() -> Unit)? = null,
     onEditPlannedSets: (() -> Unit)? = null, onSwapExercise: (() -> Unit)? = null,
     showHistoryHeader: Boolean = true, historyMenuInBody: Boolean = false,
-    showHistoryExerciseLabel: Boolean = true) {
+    showHistoryExerciseLabel: Boolean = true, onEditExercise: ((Int) -> Unit)? = null) {
     val history = workout.workout.finishedAt != null
     val sets = entry.sets.sortedBy { it.position }.filter { !history || it.completedAt != null }
     val hasTimingIndicators = sets.any { it.completedAt != null && workout.timeReviewStatus(it) in listOf("needs_review", "corrected") }
@@ -50,7 +50,7 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                     .semantics { contentDescription = "Session exercise options for ${entry.exercise.name}" }) { Text("⋮", fontSize = 24.sp) }
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("View exercise info") }, enabled = enabled,
-                    onClick = { menu = false; showInfo = true })
+                    onClick = { menu = false; if (onEditExercise != null) onEditExercise(0) else showInfo = true })
                 if (onViewLastSession != null) DropdownMenuItem(text = { Text("View last session") }, enabled = enabled,
                     modifier = Modifier.testTag("active-view-last-session-${entry.workoutExercise.id}"),
                     onClick = { menu = false; onViewLastSession() })
@@ -62,8 +62,8 @@ internal fun ActiveExerciseCard(entry: ExerciseWithSets, workout: WorkoutDetails
                     enabled = enabled && sets.any { it.completedAt == null },
                     modifier = Modifier.testTag("edit-planned-sets-${entry.workoutExercise.id}"),
                     onClick = { menu = false; onEditPlannedSets() })
-                if (onEquipment != null) DropdownMenuItem(text = { Text("Edit equipment setup") }, enabled = enabled,
-                    onClick = { menu = false; onEquipment() })
+                if (onEquipment != null || onEditExercise != null) DropdownMenuItem(text = { Text("Edit equipment setup") }, enabled = enabled,
+                    onClick = { menu = false; if (onEditExercise != null) onEditExercise(1) else onEquipment?.invoke() })
                 if (history && onNote != null) DropdownMenuItem(text = { Text("Edit exercise note") }, enabled = enabled,
                     modifier = Modifier.testTag("edit-history-exercise-note-${entry.workoutExercise.id}"),
                     onClick = { menu = false; onNote() })

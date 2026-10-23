@@ -7,7 +7,18 @@ import org.json.JSONObject
 import java.util.UUID
 
 @Entity(tableName = "gyms")
-data class Gym(@PrimaryKey val id: String = UUID.randomUUID().toString(), val name: String, val isArchived: Boolean = false)
+data class Gym(@PrimaryKey val id: String = UUID.randomUUID().toString(), val name: String, val isArchived: Boolean = false,
+    @ColumnInfo(defaultValue = "''") val addressLine1: String = "",
+    @ColumnInfo(defaultValue = "''") val addressLine2: String = "",
+    @ColumnInfo(defaultValue = "''") val city: String = "",
+    @ColumnInfo(defaultValue = "''") val region: String = "",
+    @ColumnInfo(defaultValue = "''") val postalCode: String = "",
+    @ColumnInfo(defaultValue = "''") val country: String = "")
+fun Gym.compactAddressLines() = listOf(
+    listOf(addressLine1, addressLine2).map(String::trim).filter(String::isNotBlank).joinToString("; "),
+    listOf(city, region, postalCode, country).map(String::trim).filter(String::isNotBlank).joinToString(", ")
+).filter(String::isNotBlank)
+fun Gym.addressLines() = listOf(addressLine1, addressLine2, city, region, postalCode, country).filter { it.isNotBlank() }
 @Entity(tableName = "equipment", foreignKeys = [ForeignKey(entity = Gym::class, parentColumns = ["id"], childColumns = ["gymId"], onDelete = ForeignKey.RESTRICT)], indices = [Index("gymId")])
 data class Equipment(@PrimaryKey val id: String = UUID.randomUUID().toString(), val type: String, val name: String,
     val makeModel: String = "", val gymId: String? = null, val isArchived: Boolean = false)
@@ -19,11 +30,17 @@ data class NamedEquipmentSetup(@PrimaryKey val id: String = UUID.randomUUID().to
 data class EquipmentIdentity(val id: String, val type: String, val name: String, val makeModel: String = "",
     val gymId: String? = null, val gymName: String = "")
 data class EquipmentConfiguration(val equipment: List<EquipmentIdentity> = emptyList(), val setupId: String? = null,
-    val setupName: String = "", val positions: List<EquipmentPosition> = emptyList(), val legacyDescription: String = "", val gymId: String? = null, val gymName: String = "")
+    val setupName: String = "", val positions: List<EquipmentPosition> = emptyList(), val legacyDescription: String = "", val gymId: String? = null, val gymName: String = "",
+    // Alternatives are not a list of equipment that must be used together.
+    val compatibleEquipment: List<EquipmentIdentity> = emptyList(),
+    // Each child owns a setup copy for exactly one alternative. Shared records stay independent.
+    val equipmentSetups: List<EquipmentConfiguration> = emptyList())
 class EquipmentConfigurationConverters {
     @TypeConverter fun encode(value: EquipmentConfiguration?): String? = value?.let { c -> JSONObject()
         .put("equipment", JSONArray().apply { c.equipment.forEach { e -> put(JSONObject().put("id", e.id).put("type", e.type)
             .put("name", e.name).put("makeModel", e.makeModel).put("gymId", e.gymId ?: JSONObject.NULL).put("gymName", e.gymName)) } })
+        .put("compatibleEquipment", if (c.compatibleEquipment.isEmpty()) JSONObject.NULL else encode(EquipmentConfiguration(equipment = c.compatibleEquipment)))
+        .put("equipmentSetups", JSONArray().apply { c.equipmentSetups.forEach { put(encode(it)) } })
         .put("setupId", c.setupId ?: JSONObject.NULL).put("setupName", c.setupName)
         .put("gymId", c.gymId ?: JSONObject.NULL).put("gymName", c.gymName)
         .put("positions", EquipmentPositionConverters().encode(c.positions)).put("legacyDescription", c.legacyDescription).toString() }
@@ -33,7 +50,9 @@ class EquipmentConfigurationConverters {
             e.getString("id"), e.getString("type"), e.getString("name"), e.optString("makeModel"),
             if (e.isNull("gymId")) null else e.getString("gymId"), e.optString("gymName")) } },
             if (c.isNull("setupId")) null else c.getString("setupId"), c.optString("setupName"),
-            EquipmentPositionConverters().decode(c.getString("positions")), c.optString("legacyDescription"), if (c.isNull("gymId")) null else c.getString("gymId"), c.optString("gymName"))
+            EquipmentPositionConverters().decode(c.getString("positions")), c.optString("legacyDescription"), if (c.isNull("gymId")) null else c.getString("gymId"), c.optString("gymName"),
+            if (c.isNull("compatibleEquipment")) emptyList() else decode(c.getString("compatibleEquipment"))?.equipment.orEmpty(),
+            c.optJSONArray("equipmentSetups")?.let { a -> List(a.length()) { decode(a.getString(it))!! } }.orEmpty())
     } }
 }
 
@@ -62,10 +81,14 @@ fun ExerciseWithSets.equipmentConfiguration(): EquipmentConfiguration? = workout
 class EquipmentLibraryRepository(private val database: FitnessDatabase) {
     private val dao get() = database.equipmentLibraryDao()
     fun observe() = combine(dao.gyms(), dao.equipment(), dao.setups(), ::EquipmentLibraryState)
-    suspend fun saveGym(id: String?, name: String): String {
+    suspend fun saveGym(id: String?, name: String, address: List<String>? = null): String {
         require(name.isNotBlank()) { "Enter a gym name." }
         val previous = id?.let { requireNotNull(dao.gym(it)) }
-        val record = previous?.copy(name = name.trim()) ?: Gym(name = name.trim())
+        val base = previous?.copy(name = name.trim()) ?: Gym(name = name.trim())
+        require(address == null || address.size == 6)
+        val record = if (address == null) base else base.copy(addressLine1 = address[0].trim(),
+            addressLine2 = address[1].trim(), city = address[2].trim(), region = address[3].trim(),
+            postalCode = address[4].trim(), country = address[5].trim())
         dao.save(record); return record.id
     }
     suspend fun saveEquipment(id: String?, type: String, name: String, model: String, gymId: String?): String {
@@ -84,7 +107,10 @@ class EquipmentLibraryRepository(private val database: FitnessDatabase) {
             .filterNot { it.name.isEmpty() && it.position.isEmpty() }
         require(positions.all { it.name.isNotEmpty() && it.position.isNotEmpty() }) { "Enter both a name and position, or remove the unfinished position." }
         require(configuration.equipment.map { it.id }.distinct().size == configuration.equipment.size)
-        return configuration.copy(positions = positions, setupName = configuration.setupName.trim())
+        require(configuration.equipmentSetups.all { it.equipment.size == 1 }) { "Each equipment option needs its own explicit setup association." }
+        require(configuration.equipmentSetups.map { it.equipment.single().id }.distinct().size == configuration.equipmentSetups.size)
+        return configuration.copy(positions = positions, setupName = configuration.setupName.trim(),
+            equipmentSetups = configuration.equipmentSetups.map(::clean))
     }
     /** Refresh labels only when preparing a NEW session, never when reading a snapshot. */
     suspend fun snapshot(configuration: EquipmentConfiguration?, legacy: String): EquipmentConfiguration {
@@ -99,7 +125,7 @@ class EquipmentLibraryRepository(private val database: FitnessDatabase) {
         val selectedGym = c.gymId?.let { requireNotNull(dao.gym(it)) { "Selected gym is unavailable." } }
         require(selectedGym?.isArchived != true) { "Selected gym is archived. Choose replacement equipment or gym." }
         require(identities.all { it.gymId == null || c.gymId == null || it.gymId == c.gymId }) { "Choose equipment at the selected gym or portable equipment." }
-        return c.copy(equipment = identities, legacyDescription = legacy, gymName = selectedGym?.name.orEmpty())
+        return c.copy(equipment = identities, legacyDescription = legacy, gymName = selectedGym?.name.orEmpty(), equipmentSetups = c.equipmentSetups.map { snapshot(it, legacy) })
     }
     suspend fun saveSetup(id: String?, name: String, compatibleType: String, config: EquipmentConfiguration): EquipmentConfiguration = database.withTransaction {
         require(name.isNotBlank()) { "Enter a setup name." }

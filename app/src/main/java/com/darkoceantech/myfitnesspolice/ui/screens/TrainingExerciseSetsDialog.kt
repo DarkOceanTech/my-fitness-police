@@ -54,6 +54,8 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
     var editingNote by rememberSaveable { mutableStateOf(false) }
     var config by rememberSaveable(item.exerciseId, stateSaver = EquipmentConfigurationSaver) { mutableStateOf(item.equipmentOverride ?: exercise.equipmentDefault ?: EquipmentConfiguration()) }
     var override by rememberSaveable(item.exerciseId) { mutableStateOf(item.equipmentOverride != null) }
+    val equipmentModel = LocalEquipmentLibraryModel.current
+    var exerciseEditorTab by rememberSaveable(item.exerciseId) { mutableStateOf<Int?>(null) }
     var viewingLastSession by rememberSaveable { mutableStateOf(false) }
     var setupEditor by rememberSaveable { mutableStateOf(false) }
     var setupError by remember { mutableStateOf<String?>(null) }
@@ -118,7 +120,11 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
                                 }
                                 BuilderExerciseMenu(entry, enabled, onEquipment = { setupEditor = true },
                                     onViewLastSession = { viewingLastSession = true }, onRemove = onRemove,
-                                    removalContext = "training plan", canRemove = canRemove)
+                                    removalContext = "training plan", canRemove = canRemove,
+                                    onEditExercise = if (equipmentModel == null) null else { tab ->
+                                        equipmentModel.reset()
+                                        exerciseEditorTab = tab
+                                    })
                             }
                             EquipmentConfigurationSummary(if (override) config else exercise.equipmentDefault)
                             Text(note.ifBlank { "Add a note prior to workout" },
@@ -171,6 +177,13 @@ internal fun TrainingExerciseSetsDialog(item: TrainingPlanItem.ExerciseItem, pla
             }
         }
     )
+    // The plan's local sets, note and override stay mounted while shared details are edited.
+    if (exerciseEditorTab != null && equipmentModel != null) ExerciseFormDialog(
+        formState = ExerciseFormState(), onDismiss = { exerciseEditorTab = null },
+        onEdit = equipmentModel::reset, exercise = exercise, initialTab = exerciseEditorTab!!,
+        onSave = { name, equipment, description, primary, secondary ->
+            equipmentModel.saveExercise(exercise, name, equipment, description, primary, secondary, exercise.equipmentDefault)
+        })
     if (editingNote) FullScreenNoteEditor("Edit exercise note", noteDraft, { noteDraft = it },
         onDismiss = { editingNote = false }, onSave = { note = noteDraft; editingNote = false },
         subtitle = exercise.name, tag = "training-exercise-note-editor")

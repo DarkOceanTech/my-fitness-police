@@ -119,7 +119,7 @@ internal fun ActiveStretchScreen(session: StretchSessionRow, now: Long, action: 
     if (finishing) AlertDialog(onDismissRequest = { if (!action.saving) finishing = false }, title = { Text("Finish routine early?") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Your performed time will be saved. Remaining phases will not count as completed. You can Pause instead and come back later.")
-            OutlinedTextField(notes, { notes = it }, label = { Text("Session notes (optional)") })
+            OutlinedTextField(notes, { notes = it }, label = { Text("Session notes") })
         } },
         confirmButton = { TextButton(onClick = { onControl("finish", notes); finishing = false }, enabled = !action.saving) { Text("Finish routine") } },
         dismissButton = { TextButton(onClick = { finishing = false }) { Text("Continue routine") } })

@@ -53,6 +53,9 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
     var finishDialog by rememberSaveable { mutableStateOf(false) }
     var pauseDialog by rememberSaveable { mutableStateOf(false) }
     var noteId by rememberSaveable { mutableStateOf<String?>(null) }
+    val equipmentModel = LocalEquipmentLibraryModel.current
+    var editingExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
+    var exerciseEditorTab by rememberSaveable { mutableIntStateOf(0) }
     var equipmentId by rememberSaveable { mutableStateOf<String?>(null) }
     var lastSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var plannedSetsId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -62,8 +65,8 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
     var infoId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingSetDetails by remember { mutableStateOf(false) }
     var pendingFinishId by rememberSaveable { mutableStateOf<String?>(null) }
-    DisposableEffect(editingSetDetails, noteId, equipmentId, finishDialog, lastSessionId, plannedSetsId, swapEntryId) {
-        model.deferAutoFinish(editingSetDetails || noteId != null || equipmentId != null || finishDialog || lastSessionId != null || plannedSetsId != null || swapEntryId != null)
+    DisposableEffect(editingSetDetails, noteId, equipmentId, finishDialog, lastSessionId, plannedSetsId, swapEntryId, editingExerciseId) {
+        model.deferAutoFinish(editingSetDetails || noteId != null || equipmentId != null || finishDialog || lastSessionId != null || plannedSetsId != null || swapEntryId != null || editingExerciseId != null)
         onDispose { model.deferAutoFinish(false) }
     }
     LaunchedEffect(workout?.workout?.id, lastSessionId) {
@@ -135,7 +138,7 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                         Column(Modifier.weight(1f)) {
                             Text(if (progress.isPaused) "COOL-DOWN PAUSED" else "COOL-DOWN", color = PoliceColors.LightBlue,
                                 style = MaterialTheme.typography.labelLarge)
-                            Text(if (editingSetDetails || equipmentId != null || noteId != null) "Save or close your edits to finish."
+                            Text(if (editingSetDetails || equipmentId != null || noteId != null || editingExerciseId != null) "Save or close your edits to finish."
                                 else "Finishes automatically · counts as rest time", style = MaterialTheme.typography.bodySmall, color = PoliceColors.Muted)
                         }
                         Text(sessionTime(((progress.cooldownRemainingMillis(now) + 999) / 1000) * 1000),
@@ -238,6 +241,11 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
                         ActiveExerciseCard(entry, workout, progress, !action.saving, timeModel = model,
                             onNote = { model.clearError(); noteId = entry.workoutExercise.id },
                             onEquipment = { model.clearError(); equipmentId = entry.workoutExercise.id },
+                            onEditExercise = if (equipmentModel == null) null else { tab ->
+                                equipmentModel.reset()
+                                exerciseEditorTab = tab
+                                editingExerciseId = entry.exercise.id
+                            },
                             onComplete = { model.completeActiveSet(workout.workout.id, it) },
                             onStart = { model.clearError(); countdownSetId = it },
                             onViewLastSession = { model.clearError(); lastSessionId = entry.workoutExercise.id },
@@ -288,6 +296,14 @@ fun ActiveWorkoutScreen(model: SessionViewModel, modifier: Modifier = Modifier,
         val noteEntry = entries.firstOrNull { it.workoutExercise.id == noteId }
         if (noteEntry != null) SessionNoteDialog(noteEntry.workoutExercise.notes, action,
             onDismiss = { noteId = null }, onSave = { model.sessionNote(workout.workout.id, noteEntry.workoutExercise.id, it) })
+        // Shared catalog edits must not write session sets, timing state, or equipment snapshots.
+        val editingExercise = state.exercises.firstOrNull { it.id == editingExerciseId }
+        if (editingExercise != null && equipmentModel != null) ExerciseFormDialog(
+            formState = ExerciseFormState(), onDismiss = { editingExerciseId = null },
+            onEdit = equipmentModel::reset, exercise = editingExercise, initialTab = exerciseEditorTab,
+            onSave = { name, equipment, description, primary, secondary ->
+                equipmentModel.saveExercise(editingExercise, name, equipment, description, primary, secondary, editingExercise.equipmentDefault)
+            })
         val equipmentEntry = entries.firstOrNull { it.workoutExercise.id == equipmentId }
         if (equipmentEntry != null) EquipmentPositionEditor(equipmentEntry, action,
             onDismiss = { equipmentId = null; model.clearError() }, onEdit = model::clearError,

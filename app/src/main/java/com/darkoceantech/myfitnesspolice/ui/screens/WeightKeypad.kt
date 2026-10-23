@@ -52,7 +52,7 @@ internal fun WeightKeypad(value: String, onDismiss: () -> Unit, onSave: (String)
         BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
             val wide = maxWidth > 600.dp
             val details: @Composable ColumnScope.() -> Unit = {
-                Text("Weight (Lbs)", style = MaterialTheme.typography.titleLarge)
+                RequiredFieldLabel("Weight (Lbs)")
                 Surface(color = PoliceColors.Background, shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth().testTag("weight-keypad-value").semantics(mergeDescendants = true) {}) {
                     Text(draft.ifEmpty { "—" }, Modifier.padding(16.dp), style = MaterialTheme.typography.headlineMedium)
